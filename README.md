@@ -1,14 +1,3 @@
--Ideas and notes for future-
-Web interface integration ideas, I would like to have cursor / warp type capability on the end project. Here are some open projects to consider:
-Termpage - https://github.com/tautvilas/termpage
-Void - https://github.com/voideditor/void 
-Zed - https://github.com/zed-industries/zed
-
-
-markup 
-------
-
-Author: Garrett Hazlett
 
 ------
 
