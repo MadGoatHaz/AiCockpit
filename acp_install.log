@@ -1,0 +1,99 @@
+
+[32m[1mACP INSTALLER:(B[m Welcome to AiCockpit (ACP) Backend Installer (v0.5.8)!
+[32m[1mACP INSTALLER:(B[m Project root: [1m/home/g/Ai/AiCockpit(B[m
+[33m[1mACP WARNING:(B[m Existing venv '[1m.venv-acp(B[m' detected.
+[34mACP INFO:(B[m Will update deps.
+[32m[1mACP INSTALLER:(B[m --- [1mStep 1: Checking System Prerequisites(B[m ---
+2025-05-25 22:41:20 - Starting section: Step 1: Checking System Prerequisites
+2025-05-25 22:41:20 - Checking Python version.
+[32m[1mACP INSTALLER:(B[m Python version [1m3.13(B[m found.
+[32m[1mACP INSTALLER:(B[m [1mpip3(B[m found.
+[33m[1mACP WARNING:(B[m python3-venv not installed.
+[32m[1mACP INSTALLER:(B[m Installing [1mpython3-venv(B[m...
+[32m[1mACP INSTALLER:(B[m [1mpython3-venv(B[m installed.
+[32m[1mACP INSTALLER:(B[m [1mpython3-venv(B[m found.
+[32m[1mACP INSTALLER:(B[m [1mgit(B[m found.
+[32m[1mACP INSTALLER:(B[m [1mcmake(B[m found.
+[33m[1mACP WARNING:(B[m g++ C++ compiler not installed.
+[32m[1mACP INSTALLER:(B[m Installing [1mg++(B[m...
+[32m[1mACP INSTALLER:(B[m [1mg++(B[m installed.
+[32m[1mACP INSTALLER:(B[m [1mg++ C++ compiler(B[m found.
+[32m[1mACP INSTALLER:(B[m --- [1mStep 2: Setting up Python Virtual Environment(B[m ---
+2025-05-25 22:41:31 - Starting section: Step 2: Setting up Python Virtual Environment
+[32m[1mACP INSTALLER:(B[m Activating virtual environment...
+[32m[1mACP INSTALLER:(B[m --- [1mStep 3: Installing Project Dependencies with PDM(B[m ---
+2025-05-25 22:41:31 - Starting section: Step 3: Installing Project Dependencies with PDM
+[32m[1mACP INSTALLER:(B[m PDM found: [1mPDM, version 2.24.2(B[m
+[34mACP INFO:(B[m llama-cpp-python seems installed.
+[32m[1mACP INSTALLER:(B[m Installing/updating project dependencies...
+[34mACP INFO:(B[m This may take time.
+[32m[1mACP INSTALLER:(B[m Project dependencies installed/updated.
+[32m[1mACP INSTALLER:(B[m --- [1mStep 4: Configuring Environment (.env file)(B[m ---
+2025-05-25 22:41:35 - Starting section: Step 4: Configuring Environment (.env file)
+[34mACP INFO:(B[m Provide paths for ACP directories. Press [1mEnter(B[m for defaults.
+[32m[1mACP INSTALLER:(B[m Updated [1mMODELS_DIR(B[m in [1m.env(B[m
+[34mACP INFO:(B[m Scanning LLM models in '[1m/home/g/Models(B[m' (subdirs)...
+2025-05-25 22:41:42 - Discovery exit: 0. Output: INFO: Inside an active virtualenv /home/g/Ai/AiCockpit/.venv-acp, reusing it.
+Set env var PDM_IGNORE_ACTIVE_VENV to ignore it.
+DEBUG: Starting discover_models.py script.
+DEBUG: Attempting to import from acp_backend.llm_backends.llama_cpp...
+DEBUG: settings.MODELS_DIR overridden by env var: /home/g/Models
+DEBUG (LlamaCppBackend): llama-cpp-python package IS installed.
+DEBUG (LlamaCppBackend): Initialized.
+DEBUG: Real LlamaCppBackend initialized successfully.
+DEBUG: Script received MODELS_DIR from env: /home/g/Models
+DEBUG: Calling discover function (real)...
+DEBUG (LlamaCppBackend.discover_models): Received models_dir: /home/g/Models
+DEBUG (LlamaCppBackend.discover_models): os.path.isdir('/home/g/Models') check: True
+DEBUG (LlamaCppBackend.discover_models): Discovering models in: /home/g/Models
+DEBUG (LlamaCppBackend.discover_models): Glob pattern: /home/g/Models/**/*.gguf
+DEBUG (LlamaCppBackend.discover_models): Raw glob result: ['/home/g/Models/bartowski/nvidia_AceReason-Nemotron-14B-GGUF/nvidia_AceReason-Nemotron-14B-IQ2_XS.gguf', '/home/g/Models/bartowski/nvidia_AceReason-Nemotron-14B-GGUF/nvidia_AceReason-Nemotron-14B-Q8_0.gguf', '/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-IQ1_S.gguf', '/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-IQ2_XXS.gguf', '/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-Q8_K_XL.gguf', '/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf', '/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL.gguf', '/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/mmproj-F32.gguf', '/home/g/Models/unsloth/Qwen3-8B-128K-GGUF/Qwen3-8B-128K-UD-IQ2_XXS.gguf', '/home/g/Models/unsloth/Qwen3-14B-128K-GGUF/Qwen3-14B-128K-UD-IQ2_XXS.gguf', '/home/g/Models/unsloth/Qwen3-4B-128K-GGUF/Qwen3-4B-128K-UD-IQ2_XXS.gguf', '/home/g/Models/mistralai/Devstral-Small-2505_gguf/devstral.gguf', '/home/g/Models/mistralai/Devstral-Small-2505_gguf/devstralQ4_0.gguf', '/home/g/Models/miike-ai/gemma3-4b-coder-16bit-Q4_K_M-GGUF/gemma3-4b-coder-16bit-q4_k_m.gguf', '/home/g/Models/miike-ai/gemma-3-coder-q8_0-gguf/gemma-3.Q8_0.gguf', '/home/g/Models/lmstudio-community/Devstral-Small-2505-GGUF/Devstral-Small-2505-Q4_K_M.gguf', '/home/g/Models/lmstudio-community/Devstral-Small-2505-GGUF/Devstral-Small-2505-Q8_0.gguf', '/home/g/Models/lmstudio-community/Qwen3-30B-A3B-GGUF/Qwen3-30B-A3B-Q6_K.gguf']
+DEBUG (LlamaCppBackend.discover_models): Returning 18 models.
+DEBUG: Discovered 18 models.
+MODELS_FOUND
+  1. nvidia_AceReason-Nemotron-14B-IQ2_XS.gguf (ID: nvidia_AceReason-Nemotron-14B-IQ2_XS, Size: 4.38GB, Quant: IQ2_XS)
+  2. nvidia_AceReason-Nemotron-14B-Q8_0.gguf (ID: nvidia_AceReason-Nemotron-14B-Q8_0, Size: 14.62GB, Quant: Q8_0)
+  3. Qwen3-30B-A3B-128K-UD-IQ1_S.gguf (ID: Qwen3-30B-A3B-128K-UD-IQ1_S, Size: 8.4GB, Quant: IQ1_S)
+  4. Qwen3-30B-A3B-128K-UD-IQ2_XXS.gguf (ID: Qwen3-30B-A3B-128K-UD-IQ2_XXS, Size: 9.65GB, Quant: IQ2_XXS)
+  5. Qwen3-30B-A3B-128K-UD-Q8_K_XL.gguf (ID: Qwen3-30B-A3B-128K-UD-Q8_K_XL, Size: 33.52GB, Quant: unknown)
+  6. Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf (ID: Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL, Size: 13.51GB, Quant: unknown)
+  7. Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL.gguf (ID: Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL, Size: 27.0GB, Quant: unknown)
+  8. mmproj-F32.gguf (ID: mmproj-F32, Size: 1.64GB, Quant: F32)
+  9. Qwen3-8B-128K-UD-IQ2_XXS.gguf (ID: Qwen3-8B-128K-UD-IQ2_XXS, Size: 2.43GB, Quant: IQ2_XXS)
+  10. Qwen3-14B-128K-UD-IQ2_XXS.gguf (ID: Qwen3-14B-128K-UD-IQ2_XXS, Size: 4.16GB, Quant: IQ2_XXS)
+  11. Qwen3-4B-128K-UD-IQ2_XXS.gguf (ID: Qwen3-4B-128K-UD-IQ2_XXS, Size: 1.17GB, Quant: IQ2_XXS)
+  12. devstral.gguf (ID: devstral, Size: 43.92GB, Quant: unknown)
+  13. devstralQ4_0.gguf (ID: devstralQ4_0, Size: 12.52GB, Quant: unknown)
+  14. gemma3-4b-coder-16bit-q4_k_m.gguf (ID: gemma3-4b-coder-16bit-q4_k_m, Size: 2.32GB, Quant: Q4_K_M)
+  15. gemma-3.Q8_0.gguf (ID: gemma-3.Q8_0, Size: 3.85GB, Quant: Q8_0)
+  16. Devstral-Small-2505-Q4_K_M.gguf (ID: Devstral-Small-2505-Q4_K_M, Size: 13.35GB, Quant: Q4_K_M)
+  17. Devstral-Small-2505-Q8_0.gguf (ID: Devstral-Small-2505-Q8_0, Size: 23.33GB, Quant: Q8_0)
+  18. Qwen3-30B-A3B-Q6_K.gguf (ID: Qwen3-30B-A3B-Q6_K, Size: 23.38GB, Quant: Q6_K)
+---JSON_MODELS_START---
+[{"id": "nvidia_AceReason-Nemotron-14B-IQ2_XS", "name": "nvidia_AceReason-Nemotron-14B-IQ2_XS.gguf", "path": "/home/g/Models/bartowski/nvidia_AceReason-Nemotron-14B-GGUF/nvidia_AceReason-Nemotron-14B-IQ2_XS.gguf", "size_gb": 4.38, "quantization": "IQ2_XS", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "nvidia_AceReason-Nemotron-14B-Q8_0", "name": "nvidia_AceReason-Nemotron-14B-Q8_0.gguf", "path": "/home/g/Models/bartowski/nvidia_AceReason-Nemotron-14B-GGUF/nvidia_AceReason-Nemotron-14B-Q8_0.gguf", "size_gb": 14.62, "quantization": "Q8_0", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-30B-A3B-128K-UD-IQ1_S", "name": "Qwen3-30B-A3B-128K-UD-IQ1_S.gguf", "path": "/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-IQ1_S.gguf", "size_gb": 8.4, "quantization": "IQ1_S", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-30B-A3B-128K-UD-IQ2_XXS", "name": "Qwen3-30B-A3B-128K-UD-IQ2_XXS.gguf", "path": "/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-IQ2_XXS.gguf", "size_gb": 9.65, "quantization": "IQ2_XXS", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-30B-A3B-128K-UD-Q8_K_XL", "name": "Qwen3-30B-A3B-128K-UD-Q8_K_XL.gguf", "path": "/home/g/Models/unsloth/Qwen3-30B-A3B-128K-GGUF/Qwen3-30B-A3B-128K-UD-Q8_K_XL.gguf", "size_gb": 33.52, "quantization": "unknown", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL", "name": "Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf", "path": "/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf", "size_gb": 13.51, "quantization": "unknown", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL", "name": "Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL.gguf", "path": "/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/Mistral-Small-3.1-24B-Instruct-2503-UD-Q8_K_XL.gguf", "size_gb": 27.0, "quantization": "unknown", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "mmproj-F32", "name": "mmproj-F32.gguf", "path": "/home/g/Models/unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF/mmproj-F32.gguf", "size_gb": 1.64, "quantization": "F32", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-8B-128K-UD-IQ2_XXS", "name": "Qwen3-8B-128K-UD-IQ2_XXS.gguf", "path": "/home/g/Models/unsloth/Qwen3-8B-128K-GGUF/Qwen3-8B-128K-UD-IQ2_XXS.gguf", "size_gb": 2.43, "quantization": "IQ2_XXS", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-14B-128K-UD-IQ2_XXS", "name": "Qwen3-14B-128K-UD-IQ2_XXS.gguf", "path": "/home/g/Models/unsloth/Qwen3-14B-128K-GGUF/Qwen3-14B-128K-UD-IQ2_XXS.gguf", "size_gb": 4.16, "quantization": "IQ2_XXS", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-4B-128K-UD-IQ2_XXS", "name": "Qwen3-4B-128K-UD-IQ2_XXS.gguf", "path": "/home/g/Models/unsloth/Qwen3-4B-128K-GGUF/Qwen3-4B-128K-UD-IQ2_XXS.gguf", "size_gb": 1.17, "quantization": "IQ2_XXS", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "devstral", "name": "devstral.gguf", "path": "/home/g/Models/mistralai/Devstral-Small-2505_gguf/devstral.gguf", "size_gb": 43.92, "quantization": "unknown", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "devstralQ4_0", "name": "devstralQ4_0.gguf", "path": "/home/g/Models/mistralai/Devstral-Small-2505_gguf/devstralQ4_0.gguf", "size_gb": 12.52, "quantization": "unknown", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "gemma3-4b-coder-16bit-q4_k_m", "name": "gemma3-4b-coder-16bit-q4_k_m.gguf", "path": "/home/g/Models/miike-ai/gemma3-4b-coder-16bit-Q4_K_M-GGUF/gemma3-4b-coder-16bit-q4_k_m.gguf", "size_gb": 2.32, "quantization": "Q4_K_M", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "gemma-3.Q8_0", "name": "gemma-3.Q8_0.gguf", "path": "/home/g/Models/miike-ai/gemma-3-coder-q8_0-gguf/gemma-3.Q8_0.gguf", "size_gb": 3.85, "quantization": "Q8_0", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Devstral-Small-2505-Q4_K_M", "name": "Devstral-Small-2505-Q4_K_M.gguf", "path": "/home/g/Models/lmstudio-community/Devstral-Small-2505-GGUF/Devstral-Small-2505-Q4_K_M.gguf", "size_gb": 13.35, "quantization": "Q4_K_M", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Devstral-Small-2505-Q8_0", "name": "Devstral-Small-2505-Q8_0.gguf", "path": "/home/g/Models/lmstudio-community/Devstral-Small-2505-GGUF/Devstral-Small-2505-Q8_0.gguf", "size_gb": 23.33, "quantization": "Q8_0", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}, {"id": "Qwen3-30B-A3B-Q6_K", "name": "Qwen3-30B-A3B-Q6_K.gguf", "path": "/home/g/Models/lmstudio-community/Qwen3-30B-A3B-GGUF/Qwen3-30B-A3B-Q6_K.gguf", "size_gb": 23.38, "quantization": "Q6_K", "loaded": false, "backend": "llama_cpp", "architecture": null, "context_length": null, "parameters": null}]
+---JSON_MODELS_END---
+[32m[1mACP INSTALLER:(B[m Discovered LLM models:
+[34mACP INFO:(B[m Select default LLM (ID will be set as LLAMA_CPP_MODEL_PATH):
+[34mACP INFO:(B[m Selected model ID: [1mdevstralQ4_0(B[m
+[34mACP INFO:(B[m Setting LLAMA_CPP_MODEL_PATH to: [1mdevstralQ4_0(B[m
+[32m[1mACP INSTALLER:(B[m Updated [1mLLAMA_CPP_MODEL_PATH(B[m in [1m.env(B[m
+[32m[1mACP INSTALLER:(B[m Updated [1mWORK_SESSIONS_DIR(B[m in [1m.env(B[m
+[32m[1mACP INSTALLER:(B[m Updated [1mLOG_DIR(B[m in [1m.env(B[m
+[32m[1mACP INSTALLER:(B[m Updated [1mTEMP_DIR(B[m in [1m.env(B[m
+[32m[1mACP INSTALLER:(B[m Updated [1mAPP_PORT(B[m in [1m.env(B[m
+[32m[1mACP INSTALLER:(B[m .env file configured.
+[32m[1mACP INSTALLER:(B[m --- [1mStep 5: Creating Application Directories(B[m ---
+2025-05-25 22:41:50 - Starting section: Step 5: Creating Application Directories
+[32m[1mACP INSTALLER:(B[m Ensured dir: [1m/home/g/Models(B[m
+[32m[1mACP INSTALLER:(B[m Ensured dir: [1m/home/g/Ai/AiCockpit/work_sessions(B[m
+[32m[1mACP INSTALLER:(B[m Ensured dir: [1m/home/g/Ai/AiCockpit/logs(B[m
+[32m[1mACP INSTALLER:(B[m Ensured dir: [1m/home/g/Ai/AiCockpit/temp(B[m
+[32m[1mACP INSTALLER:(B[m Ensured dir: [1m/home/g/Ai/AiCockpit/work_sessions/_agent_configs(B[m
+[32m[1mACP INSTALLER:(B[m --- [1mAiCockpit (ACP) Backend Installation/Update Complete!(B[m ---
+[34mACP INFO:(B[m Log file: [1m/home/g/Ai/AiCockpit/acp_install.log(B[m
+[34mACP INFO:(B[m To activate venv: [1msource /home/g/Ai/AiCockpit/.venv-acp/bin/activate(B[m
+[34mACP INFO:(B[m Models dir: [1m/home/g/Models(B[m
+[34mACP INFO:(B[m To run app: [1mpdm run dev(B[m (port 8000) or [1mpython acp_backend/main.py(B[m (port [1m8779(B[m)
+2025-05-25 22:41:52 - Installation script finished successfully.
+2025-05-25 22:41:52 - Script exiting.
+[34mACP INFO:(B[m Deactivating virtual environment for script session.

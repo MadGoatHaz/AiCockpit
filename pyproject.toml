@@ -1,0 +1,96 @@
+# This file uses PDM as the build system and dependency manager.
+# Reference: [https://pdm.fming.dev](https://pdm.fming.dev)
+
+[project]
+name = "aicockpit-backend"
+version = "0.1.0-alpha" # Matches APP_VERSION in config.py
+description = "Backend API for AiCockpit (ACP), a platform for AI-driven workflows, LLM management, and agent execution."
+authors = [
+    {name = "Your Name / ACP Project", email = "your_email@example.com"},
+]
+dependencies = [
+    "fastapi>=0.100.0", # Keep FastAPI version reasonably up-to-date
+    "uvicorn[standard]>=0.20.0", # For ASGI server, [standard] includes websockets and http-tools
+    "pydantic>=2.0.0", # Using Pydantic v2 features
+    "pydantic-settings>=2.0.0",
+    # python-dotenv is usually a sub-dependency of pydantic-settings, but explicit can be fine
+    # "python-dotenv>=1.0.0",
+    "sse-starlette>=1.0.0", # For Server-Sent Events
+    "llama-cpp-python>=0.2.50", # Specify a recent version, check latest compatible
+    "requests>=2.20.0", # General HTTP requests
+    "huggingface_hub>=0.18.0", # For Hugging Face Hub interactions
+    "smolagents>=0.1.0", # Placeholder version, adjust when integrating
+    "httpx>=0.24.0", # For async HTTP requests (can also be used for testing)
+    "aiofiles>=23.0.0" # For async file operations if needed by FastAPI (e.g. FileUploads)
+]
+requires-python = ">=3.10" # Recommended Python version
+readme = "README.md" 
+license = {text = "Proprietary"} 
+
+[project.urls]
+Homepage = "[https://github.com/your_username/aicockpit-backend](https://github.com/your_username/aicockpit-backend)" # Replace with your actual repo URL
+Repository = "[https://github.com/your_username/aicockpit-backend](https://github.com/your_username/aicockpit-backend)"
+
+# [project.optional-dependencies]
+# # Example: if you have features that require extra dependencies
+# # gpu_cuda = ["llama-cpp-python[cuda]"] 
+# # gpu_rocm = ["llama-cpp-python[rocm]"]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.ruff]
+# Ruff linter configuration ([https://beta.ruff.rs/docs/configuration/](https://beta.ruff.rs/docs/configuration/))
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # Pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+]
+ignore = [
+    "E501", # Line too long, handled by black
+]
+line-length = 120 
+
+[tool.ruff.isort]
+known-first-party = ["acp_backend"]
+
+[tool.black]
+# Black code formatter configuration
+line-length = 120
+# target-version = ['py310'] 
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q" 
+testpaths = [
+    "tests",
+]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."] # <-- ADDED THIS LINE
+
+[tool.pdm.scripts]
+# Define common scripts for convenience
+lint = "ruff check acp_backend tests && black --check acp_backend tests"
+format = "ruff --fix acp_backend tests && black acp_backend tests"
+test = "pytest"
+run = "uvicorn acp_backend.main:app --reload --port 8000"
+dev = "uvicorn acp_backend.main:app --reload --port 8000 --log-level debug" 
+
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.0.0",
+    "pytest-mock>=3.14.0",
+]
