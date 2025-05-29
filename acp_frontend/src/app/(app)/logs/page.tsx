@@ -1,9 +1,14 @@
 // src/app/(app)/logs/page.tsx
+"use client";
+
+import React from 'react';
+
 export default function LogsPage() {
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Logs Page</h1>
-      <p>Log streaming and summarization tools will go here.</p>
+    <div>
+      <h1 className="text-2xl font-semibold">Logs</h1>
+      <p>This page will display AI-related logs and summarization tools.</p>
+      {/* TODO: Implement LogStreamView and LogSummarizer as per description */}
     </div>
   );
 }

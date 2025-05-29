@@ -1,68 +1,85 @@
 // acp_frontend/src/components/layout/AppSidebar.tsx
 "use client";
 
-import React from 'react';
-import { cn } from '@/lib/utils'; // Assuming you have this from ShadCN setup
+import Link from "next/link";
+import { usePathname } from 'next/navigation'; // Import usePathname
+import { Gauge, PanelLeft } from "lucide-react"; // PanelLeft might be used in Header, Gauge for logo
+import { NAV_ITEMS, type NavItem } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Assuming tooltip is a ShadCN component
 
-// Import icons later, e.g., import { Gauge, MessageSquare, BarChart, ShieldCheck, History, Users, PlaySquare } from 'lucide-react';
-
-// Define NAV_ITEMS later in constants.ts
-// For now, a placeholder
-const NAV_ITEMS = [
-  { href: "/interact", label: "Workspaces", icon: "MessageSquare" }, // Placeholder icon name
-  { href: "/aisight", label: "AiSight", icon: "Gauge" },
-  { href: "/logs", label: "Logs", icon: "BarChart" },
-  { href: "/alerts", label: "Alerts", icon: "ShieldCheck" },
-  { href: "/history", label: "History", icon: "History" },
-  { href: "/fleet", label: "Fleet", icon: "Users" },
-  { href: "/live-preview", label: "Live Preview", icon: "PlaySquare" },
-];
-
-
-// This will be a more complex component later
-// For now, a simple placeholder
 interface AppSidebarProps {
   isCollapsed: boolean;
-  // Add other props as needed, e.g., toggle function
+  // Removed onToggle as sidebar itself won't toggle, header will
 }
 
 export default function AppSidebar({ isCollapsed }: AppSidebarProps) {
+  const pathname = usePathname(); // Get current path
+
+  const isActive = (path: string) => {
+    // Handle exact match for root if necessary, otherwise startsWith for nested routes
+    return pathname === path || (path !== "/" && pathname.startsWith(path));
+  };
+
   return (
-    <aside
-      className={cn(
-        "h-screen bg-card text-card-foreground border-r transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-20" : "w-64"
-      )}
-    >
-      <div className="p-4">
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-          {!isCollapsed && <h1 className="text-2xl font-bold text-primary">AiCockpit</h1>}
-          {/* Placeholder for logo if isCollapsed */}
-          {isCollapsed && <span className="text-2xl font-bold text-primary">A</span>}
+    <TooltipProvider delayDuration={0}>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-10 hidden flex-col border-r bg-background transition-all duration-300 ease-in-out sm:flex",
+          isCollapsed ? "w-20" : "w-64"
+        )}
+      >
+        <div className="flex h-16 items-center border-b px-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-semibold text-primary"
+          >
+            <Gauge className="h-6 w-6" />
+            {!isCollapsed && <span className="">AiCockpit</span>}
+          </Link>
         </div>
-      </div>
-      <nav className="mt-8">
-        <ul>
-          {NAV_ITEMS.map((item) => (
-            <li key={item.href} className="mb-2">
-              <a
-                href={item.href}
-                className={cn(
-                  "flex items-center p-3 rounded-md hover:bg-muted",
-                  isCollapsed ? "justify-center" : ""
-                )}
+        <nav
+          className={cn(
+            "flex flex-col gap-2 px-4 py-4",
+            isCollapsed ? "items-center" : ""
+          )}
+        >
+          {NAV_ITEMS.map((item: NavItem) =>
+            isCollapsed ? (
+              <Tooltip key={item.path} delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={item.path}
+                    data-active={isActive(item.path)} // Add data-active attribute
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span className="sr-only">{item.label}</span>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={5}>
+                  {item.label}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link
+                key={item.path}
+                href={item.path}
+                data-active={isActive(item.path)} // Add data-active attribute
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-foreground hover:bg-muted data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
               >
-                {/* Icon placeholder - replace with actual Lucide icon later */}
-                <span className="w-6 h-6 mr-3">{/* Icon: {item.icon} */}</span>
-                {!isCollapsed && <span>{item.label}</span>}
-              </a>
-              {isCollapsed && (
-                <span className="sr-only">{item.label}</span> // For accessibility
-              )}
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </aside>
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            )
+          )}
+        </nav>
+      </aside>
+    </TooltipProvider>
   );
 }

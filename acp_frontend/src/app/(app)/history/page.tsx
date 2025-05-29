@@ -1,9 +1,14 @@
 // src/app/(app)/history/page.tsx
+"use client";
+
+import React from 'react';
+
 export default function HistoryPage() {
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">History Page</h1>
-      <p>Historical performance data and charts will go here.</p>
+    <div>
+      <h1 className="text-2xl font-semibold">History</h1>
+      <p>This page will allow visualization of historical performance trends.</p>
+      {/* TODO: Implement Filter Controls and HistoricalDataChart as per description */}
     </div>
   );
 }

@@ -5,31 +5,41 @@
 
 @layer base {
   :root {
-    /* Your HSL color variables as defined before */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 240 10% 3.9%; /* Dark Gray - #303030 (approx) */
+    --foreground: 0 0% 98%; /* Light Gray/White - #E0E0E0 (approx) */
+
     --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
+
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 262 75% 50%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 0 0% 62.9%;
-    --accent: 195 78% 52%;
-    --accent-foreground: 240 10% 3.9%;
-    --destructive: 0 62.8% 30.6%;
+
+    --primary: 262 73% 50%; /* Deep Purple - #673AB7 */
+    --primary-foreground: 0 0% 100%; /* White for contrast on primary */
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 199 73% 52%; /* Electric Blue - #29ABE2 */
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 195 78% 52%;
+    --ring: 240 4.9% 83.9%;
+
     --radius: 0.5rem;
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 98%;
-    --warning: 45 93% 47%;
-    --warning-foreground: 240 10% 3.9%;
+
+    /* Custom Status Colors */
+    --success: 142 76% 36%; /* Green */
+    --success-foreground: 0 0% 100%;
+    --warning: 45 93% 47%; /* Yellow/Orange */
+    --warning-foreground: 240 5.9% 10%;
 
     /* Ensure your font variables are defined if you use them directly in CSS */
     /* These are typically handled by Next.js font optimization and applied via className */
@@ -37,22 +47,17 @@
     /* --font-geist-mono: ...; */
   }
 
-  /* 
-    If :root already defines your preferred (dark) theme, 
-    you might not need a separate .dark block unless you plan to have a light theme toggle.
-  */
-  /*
   .dark {
-    --background: 222.2 47.4% 11.2%; 
-    // ... other dark theme variables ... 
+    /* Example: if you add dark mode specific overrides, they would go here */
+    /* For now, the base theme is dark-biased as per AiCockpit description */
   }
-  */
 }
 
 @layer base {
+  * {
+    /* This rule is being removed entirely */
+  }
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
     /* If using Next/Font for Geist, the font family is applied via className on the body or html tag */
     /* font-family: var(--font-geist-sans), sans-serif; */
