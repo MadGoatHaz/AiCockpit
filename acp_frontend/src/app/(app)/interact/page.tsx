@@ -2,15 +2,10 @@
 // acp_frontend/src/app/(app)/interact/page.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, XIcon } from 'lucide-react';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
 
 // Import the new panel components
 import FileBrowserPanel, { FileSystemItem } from "@/components/workspaces/FileBrowserPanel";
@@ -27,24 +22,27 @@ interface Workspace {
   // Later, we can add more properties like file tree, open files, panel layouts, etc.
 }
 
-let workspaceCounter = 1; // Use a simple counter outside component for unique IDs if preferred
-
 export default function InteractPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
-    const initialId = `ws-${workspaceCounter++}`;
-    return [{ id: initialId, name: "Workspace 1", selectedFile: null }];
-  });
-  const [activeTab, setActiveTab] = useState<string>(workspaces[0].id);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([
+    // Initialize with one static workspace to prevent hydration errors
+    { id: "ws-1", name: "Workspace 1", selectedFile: null }
+  ]);
+  const [activeTab, setActiveTab] = useState<string>("ws-1"); // Default to the static ID
+
+  // Use a ref for the counter for new workspaces. Start at 2 because ws-1 is statically created.
+  const workspaceCounterRef = useRef(2);
 
   const addWorkspace = () => {
-    const newWorkspaceId = `ws-${workspaceCounter++}`;
+    const newWorkspaceNumber = workspaceCounterRef.current;
+    const newWorkspaceId = `ws-${newWorkspaceNumber}`;
     const newWorkspace: Workspace = {
       id: newWorkspaceId,
-      name: `Workspace ${workspaceCounter -1}`,
+      name: `Workspace ${newWorkspaceNumber}`,
       selectedFile: null,
     };
-    setWorkspaces([...workspaces, newWorkspace]);
+    setWorkspaces(prevWorkspaces => [...prevWorkspaces, newWorkspace]);
     setActiveTab(newWorkspaceId);
+    workspaceCounterRef.current++; // Increment for the next workspace
   };
 
   const handleCloseTab = (tabId: string) => {
@@ -53,21 +51,9 @@ export default function InteractPage() {
     const newWorkspaces = workspaces.filter(ws => ws.id !== tabId);
     setWorkspaces(newWorkspaces);
 
-    // If the active tab was closed, set a new active tab
     if (activeTab === tabId) {
       setActiveTab(newWorkspaces[0]?.id || "");
     }
-  };
-
-  const handleAddWorkspace = () => {
-    const newWorkspaceId = `ws-${workspaceCounter++}`;
-    const newWorkspace: Workspace = {
-      id: newWorkspaceId,
-      name: `Workspace ${workspaceCounter -1}`,
-      selectedFile: null,
-    };
-    setWorkspaces([...workspaces, newWorkspace]);
-    setActiveTab(newWorkspaceId);
   };
 
   const handleFileSelect = (workspaceId: string, file: FileSystemItem) => {
@@ -125,45 +111,42 @@ export default function InteractPage() {
         </div>
 
         {workspaces.map((ws) => (
-          <TabsContent key={ws.id} value={ws.id} className="flex-grow mt-0 flex flex-col min-h-0 p-0"> {/* Removed default padding from TabsContent */}
-            <ResizablePanelGroup
-              direction="horizontal"
-              className="flex-grow rounded-lg border bg-background"
-            >
-              <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
-                {currentWorkspace && (
-                  <FileBrowserPanel
-                    workspaceId={currentWorkspace.id}
-                    onFileSelect={(file: FileSystemItem) => handleFileSelect(currentWorkspace.id, file)}
-                  />
-                )}
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={55} minSize={30}>
-                <ResizablePanelGroup direction="vertical">
-                  <ResizablePanel defaultSize={70} minSize={20}>
-                    <div className="flex h-full items-center justify-center">
-                      {currentWorkspace && (
-                        <EditorPanel
-                          workspaceId={currentWorkspace.id}
-                          selectedFile={currentWorkspace.selectedFile}
-                        />
-                      )}
-                    </div>
-                  </ResizablePanel>
-                  <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={30} minSize={20} className="p-0">
-                    <TerminalManagerPanel workspaceId={ws.id} />
-                  </ResizablePanel>
-                </ResizablePanelGroup>
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={25} minSize={15} className="p-0">
-                {/* For now, just render AiChatPanel. We can add logic later to switch with WorkspaceSettingsPanel */}
-                <AiChatPanel workspaceId={ws.id} />
-                {/* <WorkspaceSettingsPanel workspaceId={ws.id} /> */}
-              </ResizablePanel>
-            </ResizablePanelGroup>
+          <TabsContent key={ws.id} value={ws.id} className="flex-grow mt-0 flex flex-col min-h-0 p-0"> {/* Ensure TabsContent allows flex-grow for its children */}
+            {/* New Grid Layout Start */}
+            <div className="flex-grow grid grid-rows-[5fr_1fr] gap-4 p-1"> {/* Outer container for 2 rows, adjust fr units as needed */}
+              
+              {/* Top Row: Main Content Grid (e.g., 6 columns) */}
+              <div className="grid grid-cols-6 gap-4 overflow-auto"> {/* Added overflow-auto for content */}
+                <div className="col-span-1 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* FileBrowserPanel - Added bg-card, text-card-foreground, p-2 */}
+                  {currentWorkspace && (
+                    <FileBrowserPanel
+                      workspaceId={currentWorkspace.id}
+                      onFileSelect={(file: FileSystemItem) => handleFileSelect(currentWorkspace.id, file)}
+                    />
+                  )}
+                </div>
+                <div className="col-span-3 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* EditorPanel - Added bg-card, text-card-foreground, p-2 */}
+                  {currentWorkspace && (
+                    <EditorPanel
+                      workspaceId={currentWorkspace.id}
+                      selectedFile={currentWorkspace.selectedFile}
+                    />
+                  )}
+                </div>
+                <div className="col-span-2 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* AiChatPanel - Added bg-card, text-card-foreground, p-2 */}
+                  <AiChatPanel workspaceId={ws.id} />
+                  {/* Placeholder for WorkspaceSettingsPanel later */}
+                  {/* <WorkspaceSettingsPanel workspaceId={ws.id} /> */}
+                </div>
+              </div>
+
+              {/* Bottom Row: Terminal (spans full width of the top grid) */}
+              <div className="bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* TerminalManagerPanel - Added bg-card, text-card-foreground, p-2 */}
+                <TerminalManagerPanel workspaceId={ws.id} />
+              </div>
+
+            </div>
+            {/* New Grid Layout End */}
           </TabsContent>
         ))}
         {workspaces.length === 0 && (
