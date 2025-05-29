@@ -26,7 +26,7 @@ While prioritizing local AI and data sovereignty, AiCockpit will also embrace a 
 The ultimate aspiration for AiCockpit is to evolve into a **comprehensive, collaborative Ai work environment that verges on being an operating system in itself.** We envision a future where you can interact with AiCockpit not just through typing, but through **voice commands** and other intuitive modalities, unlocking new levels of productivity and creative partnership with AI. It's about building a foundational platform for human-AI collaboration on *any* conceivable project.
 
 **Current Version:** 0.2.5-alpha (Backend Stable, Frontend In Progress)
-**Last Updated:** June 1, 2024
+**Last Updated:** March 5, 2025
 
 ---
 
