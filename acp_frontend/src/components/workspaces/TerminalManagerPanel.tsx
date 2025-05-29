@@ -21,8 +21,23 @@ const TerminalManagerPanel: React.FC<TerminalManagerPanelProps> = ({ workspaceId
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const connectTerminal = useCallback(() => {
-    if (!workspaceId || !terminalRef.current) return;
-    if (xtermInstanceRef.current) return; // Already initialized
+    if (!workspaceId || !terminalRef.current) {
+      console.log("Terminal connection prerequisites not met (no workspaceId or terminalRef).", { workspaceId, hasTerminalRef: !!terminalRef.current });
+      return;
+    }
+    // if (xtermInstanceRef.current) return; // Already initialized - This might prevent reconnection if workspaceId changes for an existing panel instance, let's allow re-init for now.
+    
+    // Clear previous instance if any, before creating a new one, especially if workspaceId changes
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    if (xtermInstanceRef.current) {
+      xtermInstanceRef.current.dispose();
+      xtermInstanceRef.current = null;
+    }
+
+    console.log(`Attempting to connect terminal for workspaceId: ${workspaceId}`);
 
     setTerminalError(null);
 
@@ -106,7 +121,9 @@ const TerminalManagerPanel: React.FC<TerminalManagerPanelProps> = ({ workspaceId
   }, [workspaceId]);
 
   useEffect(() => {
-    connectTerminal();
+    if (workspaceId) { // Only attempt to connect if workspaceId is valid
+      connectTerminal();
+    }
 
     return () => {
       // Cleanup on component unmount
@@ -128,7 +145,9 @@ const TerminalManagerPanel: React.FC<TerminalManagerPanelProps> = ({ workspaceId
       fitAddonRef.current = null;
       setIsConnected(false);
     };
-  }, [connectTerminal]); // Rerun if workspaceId changes, which changes connectTerminal
+  // }, [connectTerminal]); // Rerun if workspaceId changes, which changes connectTerminal
+  // Let's also add workspaceId directly to the dependency array for clarity and safety
+  }, [connectTerminal, workspaceId]);
 
   // Manual resize handler if needed, but ResizeObserver is preferred
   // useEffect(() => {

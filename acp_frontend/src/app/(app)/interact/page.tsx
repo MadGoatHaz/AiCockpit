@@ -2,7 +2,7 @@
 // acp_frontend/src/app/(app)/interact/page.tsx
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, XIcon } from 'lucide-react';
@@ -37,15 +37,23 @@ const DEFAULT_AI_CONFIG = {
 };
 
 export default function InteractPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([
-    { id: "ws-1", name: "Workspace 1", selectedFile: null, aiConfig: { ...DEFAULT_AI_CONFIG }, activeRightPanel: 'chat' }
-  ]);
-  const [activeTab, setActiveTab] = useState<string>("ws-1");
-  const workspaceCounterRef = useRef(2);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("");
+  const workspaceCounterRef = useRef(1); // Start at 1 for naming the first workspace
+
+  // Initialize first workspace on client-side to prevent hydration errors with UUID
+  useEffect(() => {
+    const initialWorkspaceId = crypto.randomUUID();
+    setWorkspaces([
+      { id: initialWorkspaceId, name: "Workspace 1", selectedFile: null, aiConfig: { ...DEFAULT_AI_CONFIG }, activeRightPanel: 'chat' }
+    ]);
+    setActiveTab(initialWorkspaceId);
+    workspaceCounterRef.current = 2; // Set counter for next workspace
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const addWorkspace = () => {
     const newWorkspaceNumber = workspaceCounterRef.current;
-    const newWorkspaceId = `ws-${newWorkspaceNumber}`;
+    const newWorkspaceId = crypto.randomUUID();
     const newWorkspace: Workspace = {
       id: newWorkspaceId,
       name: `Workspace ${newWorkspaceNumber}`,
@@ -55,7 +63,7 @@ export default function InteractPage() {
     };
     setWorkspaces(prevWorkspaces => [...prevWorkspaces, newWorkspace]);
     setActiveTab(newWorkspaceId);
-    workspaceCounterRef.current++; // Increment for the next workspace
+    workspaceCounterRef.current++;
   };
 
   const handleCloseTab = (tabId: string) => {
@@ -140,13 +148,13 @@ export default function InteractPage() {
         </div>
 
         {workspaces.map((ws) => (
-          <TabsContent key={ws.id} value={ws.id} className="flex-grow mt-0 flex flex-col min-h-0 p-0"> {/* Ensure TabsContent allows flex-grow for its children */}
-            {/* New Grid Layout Start */}
-            <div className="flex-grow grid grid-rows-[5fr_1fr] gap-4 p-1"> {/* Outer container for 2 rows, adjust fr units as needed */}
+          <TabsContent key={ws.id} value={ws.id} className="flex-grow mt-0 flex flex-col min-h-0 p-0"> 
+            {/* Original Grid Layout Start */}
+            <div className="flex-grow grid grid-rows-[3fr_1fr] gap-4 p-1"> 
               
-              {/* Top Row: Main Content Grid (e.g., 6 columns) */}
-              <div className="grid grid-cols-6 gap-4 overflow-auto"> {/* Added overflow-auto for content */}
-                <div className="col-span-1 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* FileBrowserPanel - Added bg-card, text-card-foreground, p-2 */}
+              {/* Top Row: Main Content Grid */}
+              <div className="grid grid-cols-6 gap-4 overflow-auto"> 
+                <div className="col-span-1 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2">
                   {currentWorkspace && (
                     <FileBrowserPanel
                       workspaceId={currentWorkspace.id}
@@ -154,7 +162,7 @@ export default function InteractPage() {
                     />
                   )}
                 </div>
-                <div className="col-span-3 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* EditorPanel - Added bg-card, text-card-foreground, p-2 */}
+                <div className="col-span-3 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2">
                   {currentWorkspace && (
                     <EditorPanel
                       workspaceId={currentWorkspace.id}
@@ -162,8 +170,7 @@ export default function InteractPage() {
                     />
                   )}
                 </div>
-                <div className="col-span-2 bg-card text-card-foreground rounded-lg border h-full flex flex-col overflow-auto"> {/* Right Panel Container */}
-                  {/* Tabs or Buttons to switch between Chat, AI Settings, WS Settings */}
+                <div className="col-span-2 bg-card text-card-foreground rounded-lg border h-full flex flex-col overflow-auto">
                   {currentWorkspace && (
                     <div className="p-2 border-b flex space-x-1">
                         <Button variant={currentWorkspace.activeRightPanel === 'chat' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('chat')}>AI Chat</Button>
@@ -171,12 +178,10 @@ export default function InteractPage() {
                         <Button variant={currentWorkspace.activeRightPanel === 'ws_settings' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('ws_settings')}>WS Settings</Button>
                     </div>
                   )}
-
                   <div className="flex-grow overflow-auto p-1">
                     {currentWorkspace?.activeRightPanel === 'chat' && currentWorkspace && (
                         <AiChatPanel 
                             workspaceId={currentWorkspace.id} 
-                            // Pass AI config to chat panel
                             selectedModelId={currentWorkspace.aiConfig.selectedModelId}
                             temperature={currentWorkspace.aiConfig.temperature}
                         />
@@ -194,13 +199,18 @@ export default function InteractPage() {
                 </div>
               </div>
 
-              {/* Bottom Row: Terminal (spans full width of the top grid) */}
-              <div className="bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* TerminalManagerPanel - Added bg-card, text-card-foreground, p-2 */}
-                <TerminalManagerPanel workspaceId={ws.id} />
+              {/* Bottom Row: Terminal */}
+              <div className="bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2">
+                {/* Ensure TerminalManagerPanel is rendered IF currentWorkspace exists */}
+                {currentWorkspace && (
+                    <TerminalManagerPanel workspaceId={currentWorkspace.id} />
+                )}
+                 {!currentWorkspace && (
+                    <div className="p-2">No active workspace for terminal</div>
+                )}
               </div>
-
             </div>
-            {/* New Grid Layout End */}
+            {/* Original Grid Layout End */}
           </TabsContent>
         ))}
         {workspaces.length === 0 && (

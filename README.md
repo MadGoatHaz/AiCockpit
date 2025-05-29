@@ -23,6 +23,7 @@
     *   [Backend (Solid & Ready!)](#backend-solid--ready)
     *   [Frontend (In Progress & Rapidly Evolving!)](#frontend-in-progress--rapidly-evolving)
 *   [🛣️ Roadmap & Current Focus](#️-roadmap--current-focus)
+*   [🚀 Next Steps / To-Do (Focus: Functional Polish & Core Features)](#-next-steps--to-do-focus-functional-polish--core-features)
 *   [🛠️ Tech Stack Snapshot](#️-tech-stack-snapshot)
 *   [🧑‍💻 Getting Started (Developers)](#-getting-started-developers)
     *   [Backend Setup](#1-backend-setup)
@@ -58,7 +59,7 @@ AiCockpit is not just another AI tool; it's envisioned as **the ultimate self-ho
 
 *   🧠 **Master Your LLMs:** Effortlessly discover, download, manage, and interact with a diverse range of local Large Language Models (GGUF focus, with an eye towards future formats and integrations). Go beyond simple chat to fine-tune, experiment, and truly own your AI interactions.
 *   🤖 **Orchestrate Intelligent Agents:** Define, configure, and deploy sophisticated AI agents (powered by frameworks like `smolagents` and beyond). Equip them with tools to automate complex workflows, conduct research, manage tasks, and act as specialized assistants for your projects.
-*   �� **Supercharge Code Development:** From initial scaffolding and boilerplate generation to advanced debugging, code explanation, refactoring, and automated testing, AiCockpit will be an indispensable co-pilot for software engineers.
+*   🧑‍✈️ **Supercharge Code Development:** From initial scaffolding and boilerplate generation to advanced debugging, code explanation, refactoring, and automated testing, AiCockpit will be an indispensable co-pilot for software engineers.
 *   🎨 **Unleash Creative Media Generation:** Extend beyond text and code. Imagine AiCockpit facilitating image generation, audio synthesis, video assistance, and other multimedia creation tasks by integrating with relevant models and tools, all managed within your local cockpit.
 *   ✍️ **Elevate Content Creation:** Whether you're drafting articles, writing scripts, brainstorming ideas, or translating languages, AiCockpit will provide a rich environment for AI-assisted writing and content development.
 *   🔬 **Drive Research & Analysis:** Utilize AI for data analysis, information retrieval, summarization of complex documents, and accelerating your research endeavors across any domain.
@@ -125,8 +126,9 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
     *   **`WorkspaceSettingsPanel`:** Loads and saves workspace name/description to backend.
     *   **`AIModelConfigurationPanel`:** Loads and saves AI model (ID, temperature) settings to backend per workspace.
     *   **`TerminalManagerPanel`:** Connects to backend WebSocket PTY for interactive terminal sessions.
-
----
+*   🚀 **Xterm.js integration with fit and attach addons: ✅ **Done!**
+*   🔒 **API client for seamless backend communication (including SSE): 🚧 **Partially Done** (Implemented on a per-component basis)
+*   🛠️ **Next.js backend proxy/rewrites for API calls: ✅ **Done!**
 
 ## 🛣️ Roadmap & Current Focus
 
@@ -177,13 +179,39 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
     *   Terminal Service (`/terminals` WebSocket endpoint): ✅ **Done!** (Verification pending stable startup)
     *   **Full `smolagents` Integration:** ⏳ Implement the agent execution logic beyond the current placeholder.
     *   **Basic User Authentication:** ⏳ Simple, secure auth for a local-first setup.
-
-3.  🌱 **OSS Readiness & Community Building (Ongoing)**
-    *   Enhance API documentation (OpenAPI + narrative docs).
-    *   Create a comprehensive Developer Guide.
     *   Maintain `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
 
 *(For a more granular breakdown of the backend's history, see the original `AiCockpit outline - Handoff Doc.txt`.)*
+
+## 🚀 Next Steps / To-Do (Focus: Functional Polish & Core Features)
+
+This section outlines the immediate priorities to bring AiCockpit to a more robust and functionally complete state.
+
+1.  **✅ Verify & Stabilize Core `Workspaces` (`/interact`) Functionality:**
+    *   Thoroughly test all interactions between frontend panels (`FileBrowser`, `Editor`, `AiChat`, `TerminalManager`, `Settings`) and the live backend.
+    *   Ensure WebSocket stability for the `TerminalManagerPanel`.
+    *   Identify and resolve any persistent errors from backend connections or frontend rendering.
+
+2.  **💅 Frontend Layout & Styling Issues: ✅ Adjusted for better balance.**
+    *   Adjusted CSS grid proportions (`grid-rows-[3fr_1fr]`) on the `/interact` page for improved panel balance.
+    *   Further user-resizable panel investigation deferred (previously attempted with `react-resizable-panels` causing issues).
+
+3.  **🤖 Enhance `smolagents` Integration (Backend & Frontend):**
+    *   Move beyond the current placeholder implementation.
+    *   **Phase 1 Goal:** Allow users to select a predefined agent, provide a goal, and stream its output.
+    *   Design and implement the necessary backend logic and frontend UI components for this.
+
+4.  **🔒 Implement Basic User Authentication:**
+    *   Add a simple and secure authentication mechanism (e.g., application-wide password) for local network access.
+    *   Implement backend endpoints and frontend login UI.
+
+5.  **🛠️ Refine Frontend API Client & State Management:**
+    *   Centralize backend API interaction logic from individual components into a more robust API client module.
+    *   Evaluate and potentially implement a more comprehensive global state management solution if needed.
+
+6.  **📝 Continuous Documentation & Testing:**
+    *   Keep `README.md` and `ACP Handoffdoc.txt` updated.
+    *   Expand test coverage for new features and fixes.
 
 ---
 
