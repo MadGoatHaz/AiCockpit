@@ -3,7 +3,7 @@
 
 [project]
 name = "aicockpit-backend"
-version = "0.1.0-alpha" # Matches APP_VERSION in config.py
+version = "0.2.0-alpha" # Matches APP_VERSION in config.py
 description = "Backend API for AiCockpit (ACP), a platform for AI-driven workflows, LLM management, and agent execution."
 authors = [
     {name = "Your Name / ACP Project", email = "your_email@example.com"},
@@ -65,7 +65,7 @@ line-length = 120
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q" 
+addopts = "-ra -q --log-cli-level=DEBUG" 
 testpaths = [
     "tests",
 ]
@@ -74,7 +74,12 @@ python_classes = "Test*"
 python_functions = "test_*"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-pythonpath = ["."] # <-- ADDED THIS LINE
+pythonpath = ["."] 
+# Pytest logging configuration
+log_cli = true
+log_cli_level = "DEBUG" # Ensure this is effective
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s (%(filename)s:%(lineno)s) - %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.pdm.scripts]
 # Define common scripts for convenience

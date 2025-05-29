@@ -54,6 +54,18 @@ This document provides a comprehensive overview of the AiCockpit project, its cu
 
 ---
 
+### 2.1. Recent Development Highlights & Stability (Late May 2025)
+
+*   **Comprehensive Testing & Debugging:** Significant effort was dedicated to rigorous testing of the backend, particularly the API endpoints. This involved:
+    *   Resolving numerous import errors and dependency conflicts that initially prevented tests from running.
+    *   Systematically addressing test failures, including complex issues related to asynchronous operations and Server-Sent Events (SSE) streaming.
+    *   Refining test logic, especially for SSE message parsing in `test_stream_llm_chat_completions`, to accurately reflect and validate the streaming behavior.
+*   **SSE Streaming Solidified:** The Server-Sent Events implementation for LLM chat completions and agent outputs was thoroughly debugged and validated, ensuring reliable real-time data streaming.
+*   **Dependency Injection Refinement:** The dependency injection pattern was further solidified, contributing to better testability and modularity of the backend services.
+*   **Achieved 100% Test Pass Rate:** As a result of these efforts, all defined unit and integration tests are currently passing, indicating a high degree of backend stability and correctness according to the existing test suite.
+
+---
+
 ### 3. Technical Stack
 
 *   **Programming Language:** Python 3.10+
@@ -167,7 +179,7 @@ The project uses `pytest` for testing, with `pytest-asyncio` for asynchronous co
 
 The primary focus moving forward is the development of a web-based user interface and the full implementation of core backend functionalities that are currently placeholders.
 
-**A. Frontend Development (High Priority):**
+**A. Frontend Development (Immediate High Priority):**
 
 *   **Technology Selection:**
     *   Evaluate and select a modern web framework. Options include React, Vue.js, Svelte, Lit, or potentially a simpler server-interfacing library like HTMX if a less SPA-heavy approach is desired for initial versions.
@@ -223,9 +235,75 @@ The primary focus moving forward is the development of a web-based user interfac
 *   **Installation Script:** Review and improve the existing `install_acp.sh` for robustness and user-friendliness across different Linux distributions.
 *   **Dockerization (Consideration):** Develop a simple Dockerfile and `docker-compose.yml` setup. This can significantly ease local deployment for users by encapsulating dependencies and providing a consistent runtime environment, especially important for DIY hardware setups.
 
+**C. Continuous Improvement & DevOps:**
+
+*   **Enhanced Test Coverage:** While current tests pass, continuously evaluate and expand test coverage, especially as new features are added or existing ones are modified. Consider property-based testing or more complex integration scenarios.
+*   **CI/CD Pipeline:** Implement a Continuous Integration/Continuous Deployment (CI/CD) pipeline (e.g., using GitHub Actions) to automate testing, linting, and potentially deployments. This will help maintain code quality and streamline the development workflow.
+*   **Documentation Maintenance:** Keep this README and other relevant documentation up-to-date as the project evolves.
+
 ---
 
-### 8. Deployment & Operational Considerations (Local DIY Focus)
+### 8. Project Roadmap & Milestones (Illustrative)
+
+*   **A. Frontend Development (Immediate High Priority):**
+    *   **Technology Selection:**
+        *   Evaluate and select a modern web framework. Options include React, Vue.js, Svelte, Lit, or potentially a simpler server-interfacing library like HTMX if a less SPA-heavy approach is desired for initial versions.
+    *   **API Client Implementation:**
+        *   Develop a robust client-side service or set of utilities to communicate with the FastAPI backend. This should handle request/response cycles, error management, and importantly, SSE stream consumption.
+    *   **Core UI Components Development:**
+        *   **LLM Management Dashboard:** Interface to list available/loaded models, display their status, and trigger load/unload operations.
+        *   **Agent Configuration UI:** Forms and views for creating, viewing, and editing both global and session-scoped agent configurations.
+        *   **Agent Execution UI:** Allow users to select an agent, provide input prompts/parameters, initiate agent runs (both blocking and streaming), and view progress/outputs.
+        *   **Work Session Management UI:** Interface for creating new sessions, listing existing ones, selecting an active session to work in, and deleting sessions.
+        *   **"Canvas" Area / File Explorer:** A visual browser for the files and directories within the active work session's `data/` directory (interacting with the WorkBoard API). Basic file viewing and editing capabilities would be a starting point.
+        *   **Chat Interface:** A dedicated UI for direct chat interactions with loaded LLMs. This could later be extended for chat-based agent interactions.
+        *   **Real-time Log/Output Display:** A component to render streaming data from SSE endpoints (agent outputs, LLM tokens) in a user-friendly way.
+
+*   **B. Backend Enhancements & Feature Completion:**
+    *   **User Authentication & Authorization (Basic):**
+        *   Implement a simple authentication mechanism suitable for a locally hosted, trusted environment. Options:
+            *   Static API key passed via HTTP header (configurable in `.env`).
+            *   Basic HTTP Authentication (username/password).
+        *   Avoid over-engineering for the initial local DIY use case; more complex auth can be added if the project evolves towards multi-user or public-facing scenarios.
+    *   **`smolagents` Full Integration:**
+        *   Transition the `AgentExecutor` from placeholder logic to a full implementation utilizing the `smolagents` library. This includes:
+            *   Defining how agents receive initial prompts, context (e.g., session history, relevant files from the work board), and configuration.
+            *   Implementing concrete agent "tools" or capabilities. Examples:
+                *   File system operations via `FileSystemManager`.
+                *   Web search (e.g., using the `SERPER_API_KEY` if configured).
+                *   A sandboxed code execution environment for agents that need to run scripts.
+            *   Establishing the agent lifecycle (start, run, stop, error states) and how agent state is managed or persisted (if required beyond session files).
+            *   Ensuring agent output (especially streaming chunks) is well-structured and contains necessary metadata for clear UI presentation.
+    *   **Advanced Canvas/WorkBoard Features (Future Consideration):**
+        *   Depending on the "canvas" UI vision, the WorkBoard API might need extensions for richer file metadata, simple file versioning, or specialized handling/previewing of common AI-related file types (e.g., notebooks, datasets).
+    *   **WebSockets (Optional Evaluation):**
+        *   While SSE is suitable for unidirectional server-to-client streams, evaluate if any planned UI features would significantly benefit from bidirectional, low-latency communication offered by WebSockets (e.g., real-time collaborative editing on the "canvas", interactive agent control beyond simple prompting).
+    *   **(Optional) `PIEBackend` Implementation:**
+        *   If supporting alternative LLM backends beyond `llama-cpp-python` (e.g., connecting to a `text-generation-inference` server via a "PIE" - Python Inference Endpoint - client) becomes a priority, complete this implementation.
+
+*   **C. API Iteration:**
+    *   As frontend development progresses and user interaction patterns become clearer, anticipate the need to refine existing API endpoints or add new ones to better support the UI. Maintain clear API contracts and versioning if necessary.
+
+*   **D. Enhanced Documentation & OSS Readiness:**
+    *   **API Documentation:** Continuously leverage FastAPI's auto-generated OpenAPI docs (`/docs` and `/redoc`). Supplement this with narrative documentation (e.g., using MkDocs or similar) explaining concepts, workflows, and advanced usage.
+    *   **Developer Guide:** Create and maintain a guide for developers covering project setup, architecture deep-dive, how to add new features (e.g., new agent tools, new API endpoints), and coding conventions.
+    *   **Community Files:**
+        *   `CONTRIBUTING.md`: Guidelines for contributing to the project (code style, pull request process, issue reporting).
+        *   `CODE_OF_CONDUCT.md`: Establish community standards.
+    *   **Test Coverage:** Maintain and expand test coverage, especially for new backend features and API endpoints critical for the web interface.
+
+*   **E. Packaging & Distribution (Initial Local Focus):**
+    *   **Installation Script:** Review and improve the existing `install_acp.sh` for robustness and user-friendliness across different Linux distributions.
+    *   **Dockerization (Consideration):** Develop a simple Dockerfile and `docker-compose.yml` setup. This can significantly ease local deployment for users by encapsulating dependencies and providing a consistent runtime environment, especially important for DIY hardware setups.
+
+*   **F. Continuous Improvement & DevOps:**
+    *   **Enhanced Test Coverage:** While current tests pass, continuously evaluate and expand test coverage, especially as new features are added or existing ones are modified. Consider property-based testing or more complex integration scenarios.
+    *   **CI/CD Pipeline:** Implement a Continuous Integration/Continuous Deployment (CI/CD) pipeline (e.g., using GitHub Actions) to automate testing, linting, and potentially deployments. This will help maintain code quality and streamline the development workflow.
+    *   **Documentation Maintenance:** Keep this README and other relevant documentation up-to-date as the project evolves.
+
+---
+
+### 9. Deployment & Operational Considerations (Local DIY Focus)
 
 *   **Target Environment:** Primarily Linux-based DIY machines (e.g., Ubuntu is a common user choice). The backend should be runnable on any system meeting Python and core dependency requirements.
 *   **Access Model:** The primary access method is via a web browser on the local network, connecting to the FastAPI server hosted on the DIY machine.
@@ -241,7 +319,7 @@ The primary focus moving forward is the development of a web-based user interfac
 
 ---
 
-### 9. Philosophy & Guiding Principles
+### 10. Philosophy & Guiding Principles
 
 *   **Solid Backend First:** The project prioritizes a robust, well-tested, and modular backend as the stable foundation upon which further functionalities and the UI are built.
 *   **Local Control & Open Models:** A core tenet is to empower users with control over their AI tools and data by enabling the use of open-source and locally run LLMs (with a current focus on GGUF formats).
