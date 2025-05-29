@@ -1,0 +1,1124 @@
+import logging
+from fastapi import APIRouter, HTTPException, status
+from acp_backend.config import settings, Settings 
+from acp_backend.models.common import StatusResponse, PingResponse
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+MODULE_NAME = "System Service"
+TAG_SYSTEM_INFO = "System Information"
+
+def _check_module_enabled():
+    if not settings.ENABLE_SYSTEM_MODULE:
+        logger.warning(f"{MODULE_NAME} is disabled in configuration.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{MODULE_NAME} is currently disabled."
+        )
+
+@router.get(
+    "/status", 
+    response_model=StatusResponse, 
+    summary="Get System Status and Basic Info",
+    tags=[TAG_SYSTEM_INFO]
+)
+async def get_system_status():
+    _check_module_enabled()
+    logger.debug("Request for system status.")
+    
+    enabled_modules_status = {
+        "llm_service": {"enabled": settings.ENABLE_LLM_MODULE, "status": "ok" if settings.ENABLE_LLM_MODULE else "disabled"},
+        "agents_service": {"enabled": settings.ENABLE_AGENT_MODULE, "status": "ok" if settings.ENABLE_AGENT_MODULE else "disabled"},
+        "work_sessions_service": {"enabled": settings.ENABLE_WORK_SESSION_MODULE, "status": "ok" if settings.ENABLE_WORK_SESSION_MODULE else "disabled"},
+        "work_board_service": {"enabled": settings.ENABLE_WORK_BOARD_MODULE, "status": "ok" if settings.ENABLE_WORK_BOARD_MODULE else "disabled"}
+    }
+    
+    application_status = "ok" 
+
+    return StatusResponse(
+        status=application_status, 
+        message=f"{settings.APP_NAME} v{settings.APP_VERSION} is running.",
+        details={
+            "application_name": settings.APP_NAME,
+            "application_version": settings.APP_VERSION,
+            "debug_mode": settings.DEBUG_MODE,
+            "configured_llm_backend": settings.LLM_BACKEND_TYPE if settings.ENABLE_LLM_MODULE else "N/A (LLM Module Disabled)",
+            "modules": enabled_modules_status
+        }
+    )
+
+@router.get(
+    "/ping", 
+    response_model=PingResponse, 
+    summary="Ping System for Liveness Check",
+    tags=[TAG_SYSTEM_INFO]
+)
+async def ping_system():
+    _check_module_enabled()
+    logger.debug("Ping request received, sending pong.")
+    return PingResponse()
+
+@router.get(
+    "/config/view", 
+    response_model=Settings, 
+    summary="View System Configuration (Review for Production)",
+    tags=[TAG_SYSTEM_INFO]
+)
+async def get_system_config_view():
+    """
+    Displays the current system configuration settings loaded from environment
+    variables and defaults. 
+    
+    **Caution**: This endpoint returns the full `Settings` object. 
+    In a production environment, ensure that sensitive values (e.g., API keys like 
+    `SERPER_API_KEY`) are not inadvertently exposed. Consider using a separate response 
+    model that excludes sensitive fields or implementing proper authorization.
+    """
+    _check_module_enabled()
+    # (Future - Category 3) Add authorization check here if this endpoint is sensitive
+    # if not current_user.is_admin: 
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized.")
+
+    logger.info("Request to view system configuration.")
+    return settings
+# acp_backend/routers/llm_service.py
+import logging
+import json
+from typing import List, AsyncGenerator, Optional, cast # Added cast
+
+from fastapi import APIRouter, HTTPException, Body, Path, status, Depends
+from sse_starlette.sse import EventSourceResponse
+
+# Correctly import app_settings and AppSettings from config
+from acp_backend.config import app_settings, AppSettings # Changed from settings, Settings
+from acp_backend.core.llm_manager import LLMManager
+from acp_backend.dependencies import get_llm_manager_dependency, get_app_settings # Changed get_settings_dependency
+
+# Corrected imports from canonical llm_models.py
+from acp_backend.models.llm_models import (
+    LLMModelInfo,
+    LoadLLMRequest,
+    ChatCompletionRequest, # This is the request model
+    LLMChatCompletion,     # This is now the response model (was ChatCompletionResponse)
+    # ChatCompletionChunk, # This is not a separate model; streaming yields LLMChatCompletion
+    DiscoveredLLMConfigResponse, # Added for discover endpoint
+    LoadedLLMsResponse,          # Added for loaded models endpoint
+    LLMConfig,                   # For LoadLLMRequest if it uses it
+    UnloadLLMRequest             # Added for unload endpoint
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+MODULE_NAME = "LLM Service" # From your original
+TAG_LLM_MODEL_MGMT = "LLM Model Management"
+TAG_LLM_CHAT = "LLM Chat Completions"
+
+# Dependency to check if the LLM module is enabled
+def _check_module_enabled(current_settings: Annotated[AppSettings, Depends(get_app_settings)]):
+    if not current_settings.ENABLE_LLM_SERVICE_MODULE: # Changed from ENABLE_LLM_MODULE
+        logger.warning(f"{MODULE_NAME} is disabled in configuration.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{MODULE_NAME} is currently disabled."
+        )
+
+# Dependency to get LLMManager, ensuring it's not None if module is enabled
+def get_llm_manager_checked(
+    llm_manager: Annotated[Optional[LLMManager], Depends(get_llm_manager_dependency)]
+) -> LLMManager:
+    if llm_manager is None:
+        # This should ideally not happen if _check_module_enabled passes
+        # and LLMManager init didn't critically fail in dependencies.py
+        logger.error("LLMManager is None after module enabled check. This indicates an initialization issue.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LLM Service is enabled but manager failed to initialize."
+        )
+    return llm_manager
+
+
+@router.get(
+    "/models",
+    response_model=DiscoveredLLMConfigResponse, # Changed from List[LLMModelInfo]
+    summary="List Discoverable LLM Models",
+    tags=[TAG_LLM_MODEL_MGMT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def list_available_models_endpoint(
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    try:
+        configs = llm_manager.discover_models() # discover_models returns List[LLMConfig]
+        return DiscoveredLLMConfigResponse(configs=configs)
+    except IOError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to access models directory: {e}")
+    except Exception as e:
+        logger.error(f"Failed to list available models: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list models: {str(e)}")
+
+
+@router.get(
+    "/models/loaded",
+    response_model=LoadedLLMsResponse, # Changed from List[LLMModelInfo]
+    summary="List Currently Loaded LLM Models",
+    tags=[TAG_LLM_MODEL_MGMT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def get_loaded_models_endpoint(
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    try:
+        loaded_llm_meta_list = llm_manager.get_loaded_models_meta() # Returns List[LLM]
+        # Convert List[LLM] to List[LLMModelInfo] for the response
+        response_models = [
+            LLMModelInfo(
+                model_id=llm.config.model_id,
+                model_name=llm.config.model_name,
+                backend_type=llm.config.backend_type,
+                status=llm.status,
+                parameters=llm.config.parameters
+            ) for llm in loaded_llm_meta_list
+        ]
+        return LoadedLLMsResponse(loaded_models=response_models)
+    except Exception as e:
+        logger.error(f"Failed to get loaded models: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get loaded models: {str(e)}")
+
+
+@router.post(
+    "/models/load",
+    response_model=LLMModelInfo, # Changed from LLMModelInfo
+    status_code=status.HTTP_200_OK,
+    summary="Load an LLM Model",
+    tags=[TAG_LLM_MODEL_MGMT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def load_llm_model_endpoint(
+    request: LoadLLMRequest = Body(...),
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    try:
+        model_to_load_config: Optional[LLMConfig] = None
+        if request.model_id:
+            discovered_configs = llm_manager.discover_models()
+            found_config = next((cfg for cfg in discovered_configs if cfg.model_id == request.model_id), None)
+            if not found_config:
+                raise FileNotFoundError(f"Model ID '{request.model_id}' not found in discoverable models.")
+            model_to_load_config = found_config
+        elif request.model_config:
+            model_to_load_config = request.model_config
+        else:
+            raise ValueError("Either model_id or model_config must be provided in the request.")
+
+        if not model_to_load_config: # Should be caught by above, but as a safeguard
+             raise ValueError("No valid model configuration to load.")
+
+        loaded_llm_meta = await llm_manager.load_model(model_to_load_config) # LLMManager.load_model returns LLM
+        
+        # Convert LLM to LLMModelInfo for the response
+        return LLMModelInfo(
+            model_id=loaded_llm_meta.config.model_id,
+            model_name=loaded_llm_meta.config.model_name,
+            backend_type=loaded_llm_meta.config.backend_type,
+            status=loaded_llm_meta.status,
+            parameters=loaded_llm_meta.config.parameters
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e: # For invalid requests or unsupported models
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e: # Catch-all for other loading errors
+        logger.error(f"Error loading model '{request.model_id or request.model_config.model_id if request.model_config else 'N/A'}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to load model: {str(e)}")
+
+
+@router.post(
+    "/models/unload", # Changed path to take model_id in body for consistency with LoadLLMRequest
+    response_model=LLMModelInfo, # What should this return? Info of the unloaded model?
+    summary="Unload an LLM Model",
+    tags=[TAG_LLM_MODEL_MGMT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def unload_llm_model_endpoint(
+    request: UnloadLLMRequest = Body(...), # Using UnloadLLMRequest model
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    model_id = request.model_id
+    unloaded_model_meta = llm_manager.get_llm_meta(model_id) # Get metadata before unload attempt
+
+    if not unloaded_model_meta:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Model ID '{model_id}' not found or not loaded, cannot unload.")
+
+    try:
+        success = await llm_manager.unload_model(model_id)
+        if success:
+            # Return the state of the model (now unloaded)
+            return LLMModelInfo(
+                model_id=unloaded_model_meta.config.model_id,
+                model_name=unloaded_model_meta.config.model_name,
+                backend_type=unloaded_model_meta.config.backend_type,
+                status=LLMStatus.UNLOADED, # Reflect new status
+                parameters=unloaded_model_meta.config.parameters
+            )
+        else:
+            # If unload_model returns False, it means it was already not loaded or an error occurred
+            # The LLMManager logs the specific error.
+            # We might need more specific error handling from unload_model if it can fail mid-process.
+            # For now, assume if it's False, it wasn't loaded or an internal error logged by manager.
+             current_status = llm_manager.get_llm_meta(model_id) # Re-fetch status
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to unload model '{model_id}'. Current status: {current_status.status if current_status else 'Not Found'}")
+
+    except ValueError as e: # Should be caught by pre-check, but for safety
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to unload model '{model_id}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to unload model: {str(e)}")
+
+
+@router.get(
+    "/models/{model_id}",
+    response_model=LLMModelInfo,
+    summary="Get Details of a Specific LLM Model (Loaded or Discoverable)",
+    tags=[TAG_LLM_MODEL_MGMT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def get_model_details_endpoint(
+    model_id: str = Path(..., description="ID of the model."),
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    # Check loaded models first
+    loaded_llm_meta = llm_manager.get_llm_meta(model_id)
+    if loaded_llm_meta:
+        return LLMModelInfo(
+            model_id=loaded_llm_meta.config.model_id,
+            model_name=loaded_llm_meta.config.model_name,
+            backend_type=loaded_llm_meta.config.backend_type,
+            status=loaded_llm_meta.status,
+            parameters=loaded_llm_meta.config.parameters
+        )
+    
+    # If not loaded, check discoverable models
+    discovered_configs = llm_manager.discover_models()
+    found_config = next((cfg for cfg in discovered_configs if cfg.model_id == model_id), None)
+    if found_config:
+        return LLMModelInfo(
+            model_id=found_config.model_id,
+            model_name=found_config.model_name,
+            backend_type=found_config.backend_type,
+            status=LLMStatus.DISCOVERED, # Not loaded, but discoverable
+            parameters=found_config.parameters
+        )
+        
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Model ID '{model_id}' not found.")
+
+
+@router.post(
+    "/chat/completions",
+    response_model=LLMChatCompletion, # For non-streaming
+    # For streaming, EventSourceResponse handles the content type
+    summary="Create Chat Completion",
+    tags=[TAG_LLM_CHAT],
+    dependencies=[Depends(_check_module_enabled)]
+)
+async def create_chat_completion_endpoint(
+    request: ChatCompletionRequest = Body(...),
+    llm_manager: Annotated[LLMManager, Depends(get_llm_manager_checked)]
+):
+    llm_meta = llm_manager.get_llm_meta(request.model_id)
+    if not llm_meta or llm_meta.status != LLMStatus.LOADED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model '{request.model_id}' not loaded or not ready."
+        )
+
+    # Prepare kwargs for LLMManager by taking them from the request if they exist
+    # and are valid for the chat_completion method.
+    # For now, LLMManager's chat_completion takes **kwargs directly.
+    # We can be more explicit here if needed.
+    optional_params = {
+        "temperature": request.temperature,
+        "max_tokens": request.max_tokens,
+        # Add other parameters from ChatCompletionRequest that LLMManager might use in **kwargs
+    }
+    # Filter out None values so they don't override defaults in LLMManager/backend
+    completion_kwargs = {k: v for k, v in optional_params.items() if v is not None}
+
+    if request.stream:
+        async def event_generator() -> AsyncGenerator[Dict[str, str], None]:
+            try:
+                stream_response = llm_manager.chat_completion(
+                    model_id=request.model_id,
+                    messages=request.messages,
+                    stream=True,
+                    **completion_kwargs
+                )
+                # Ensure stream_response is an AsyncGenerator
+                # The cast is to satisfy type checkers if they can't infer it.
+                async_gen_response = cast(AsyncGenerator[LLMChatCompletion, None], stream_response)
+
+                async for chunk in async_gen_response:
+                    # SSE expects data to be a string.
+                    # We need to serialize the Pydantic model (chunk) to a JSON string.
+                    yield {"data": chunk.model_dump_json()}
+            except Exception as e:
+                logger.error(f"Error during SSE event generation for chat completion: {e}", exc_info=True)
+                error_payload = {"error": {"message": str(e), "type": "stream_error"}}
+                # Send an error event (client needs to handle this)
+                yield {"event": "error", "data": json.dumps(error_payload)}
+        
+        return EventSourceResponse(event_generator(), media_type="text/event-stream")
+    else:
+        try:
+            # Non-streaming call
+            completion_response = await llm_manager.chat_completion(
+                model_id=request.model_id,
+                messages=request.messages,
+                stream=False,
+                **completion_kwargs
+            )
+            # Ensure completion_response is the correct type
+            return cast(LLMChatCompletion, completion_response)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except RuntimeError as e: # Catch errors from backend processing
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        except Exception as e:
+            logger.error(f"Unexpected error during non-streaming chat completion: {e}", exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {str(e)}")
+ó
+    ¥4hz   ã            
+       óB  • S SK r S SKJr  S SKJrJrJrJrJrJ	r	J
+r
+  S SKJr  S SKJr  S SKJr  S SKJr  S SKJr  S S	KJrJrJrJrJr  \ R8                  " \5      r\" 5       rS
+r Sr!S\4S jr"S\4S jr#\
+" \#5      4S\$S\4S jjr%\RM                  S\\   S\!/\
+" \%5      /S9\" SSS9\" SSS9\
+" \"5      4S\$S\$S\4S jj5       r'\RM                  S\S\!/\
+" \%5      /S9\" SSS9\" SSS9\
+" \"5      4S\$S\$S\4S  jj5       r(\RS                  S\\	RT                  S!\!/\
+" \%5      /S"9\" SSS9\" S5      \
+" \"5      4S\$S#\S\4S$ jj5       r+\RY                  S\	RZ                  S%\!/\
+" \%5      /S&9\" SSS9\" SS'S9\
+" \"5      4S\$S\$S\4S( jj5       r.\RS                  S)\\	RT                  S*\!/\
+" \%5      /S"9\" SSS9\" S5      \
+" \"5      4S\$S#\S\4S+ jj5       r/\RS                  S,\S-\!/\
+" \%5      /S9\" SSS9\" S5      \
+" \"5      4S\$S#\S\4S. jj5       r0g)/é    N)ÚList)Ú	APIRouterÚHTTPExceptionÚBodyÚPathÚQueryÚstatusÚDepends)Úsettings)Ú
+fs_manager)Úsession_handler)ÚFileSystemManager)ÚSessionHandler)ÚFileNodeÚReadFileResponseÚWriteFileRequestÚCreateDirectoryRequestÚMoveItemRequestzWorkBoard ServicezWorkBoard File SystemÚreturnc                  óX   • [         (       d  [        [        R                  S5      e[         $ )Nz$File system service not initialized.)Úglobal_fs_manager_instancer   r	   ÚHTTP_503_SERVICE_UNAVAILABLE© ó    Ú6/home/g/Ai/AiCockpit/acp_backend/routers/work_board.pyÚget_fs_manager_dependencyr      s+   € ß%Ò%¬]¼6×;^Ñ;^ğ  aGó  .Hğ  (HÜ%Ğ%r   c                  óX   • [         (       d  [        [        R                  S5      e[         $ )Nz Session service not initialized.)Úglobal_session_handler_instancer   r	   r   r   r   r   Úget_session_handler_dependencyr      s+   € ß*Ò*´-Ä×@cÑ@cğ  fHó  3Iğ  -IÜ*Ğ*r   Ú
+session_idÚcurrent_session_handlerc              ƒ   óL  #   • [         R                  (       d  [        [        R                  [
+         S3S9e UR                  U 5      I S h  v•N nU(       d  [        [        R                  SU  S3S9eg  N(! [         a   n[        [        R                  SU  3S9eS nAff = f7f)Nz is currently disabled.©Ústatus_codeÚdetailzInvalid session ID format: zSession ID 'z' not found.)
+r   ÚENABLE_WORK_BOARD_MODULEr   r	   r   ÚMODULE_NAMEÚget_sessionÚ
+ValueErrorÚHTTP_400_BAD_REQUESTÚHTTP_404_NOT_FOUND)r    r!   ÚsessionÚves       r   Ú_check_module_and_sessionr.   "   s£   é € ô ×,×,Ü¬×(KÑ(KÔWbĞVcĞczĞT{Ñ|Ğ|ğxØ/×;Ñ;¸JÓG×Gˆö Ü¬×(AÑ(AÈLĞYcĞXdĞdpĞJqÑrĞrğ ñ HøÜó xÜ¬×(CÑ(CĞNiĞjtĞiuĞLvÑwĞwûğxüs:   ‚5B$¸A7 ÁA5ÁA7 Á$B$Á5A7 Á7
+B!ÂBÂB!Â!B$z/{session_id}/fileszList Files and Directories)Úresponse_modelÚsummaryÚtagsÚdependencies.zSession ID.)ÚdescriptionÚ.zRelative directory path.ÚpathÚcurrent_fs_managerc              ƒ   ó¢  #   • UR                  X5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7f©Nr#   ú	IOError: úUnexpected error: )Úlist_dirÚFileNotFoundErrorr   r	   r+   ÚstrÚNotADirectoryErrorr*   ÚIOErrorÚHTTP_500_INTERNAL_SERVER_ERRORÚ	Exception©r    r5   r6   Úes       r   Úlist_files_in_work_boardrD   /   s¼   é € ğ )×1Ñ1°*ÓC×CĞ	CÑCøÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓo¬-ÄF×D_ÑD_ÔhkĞlmÓhnÑ*oĞ$oûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  CüóT   ‚Cƒ —˜ ›Cœ 
+C¨!A	Á	CÁ!A7Á7CÂBÂCÂ,CÃCÃCz/{session_id}/files/contentzRead File Contentz"Relative path of the file to read.c              ƒ   óş  #   • UR                  X5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7fr8   )Ú	read_filer<   r   r	   r+   r=   ÚIsADirectoryErrorr*   r)   r?   r@   rA   rB   s       r   Ú!read_file_content_from_work_boardrI   ;   sÜ   é € ğ )×2Ñ2°:ÓD×DĞ	DÑDøÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓn¬Ä6×C^ÑC^ÔgjĞklÓgmÑ)nĞ#nûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  Cüs`   ‚C=ƒ —˜ ›C=œ 
+C:¨!A	Á	C:Á!A7Á7C:Â!B%Â%C:Â2CÃC:ÃC5Ã5C:Ã:C=zWrite File Content)r/   r$   r0   r1   r2   Úrequestc              ƒ   ó¢  #   • UR                  X5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7fr8   )
+Ú
+write_filer<   r   r	   r*   r=   r>   r?   r@   rA   ©r    rJ   r6   rC   s       r   Ú write_file_content_to_work_boardrN   H   s¼   é € ğ )×3Ñ3°JÓH×HĞ	HÑHøÜÓn¬Ä6×C^ÑC^ÔgjĞklÓgmÑ)nĞ#nûÜÓo¬-ÄF×D_ÑD_ÔhkĞlmÓhnÑ*oĞ$oûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  CürE   zDelete File or Directory)r$   r0   r1   r2   zRelative path to delete.c              ƒ   ó†  #   •  UR                  X5      I S h  v•N (       d  [        [        R                  SS9e g  N#! [         a&  n[        [        R
+                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7f)NzDeletion failed unexpectedly.r#   r9   r:   )	Údelete_itemr   r	   r@   r<   r*   r=   r?   rA   rB   s       r   Údelete_work_board_itemrQ   T   sÂ   é € ğCØ'×3Ñ3°JÓE×EÕEÜ ¬V×-RÑ-RĞ[zÑ{Ğ{ğ Fğ
+ ñ FøäÓn¬Ä6×C^ÑC^ÔgjĞklÓgmÑ)nĞ#nûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  CüsI   ‚C„> ˜<™!> ºC¼> ¾
+B>Á!A)Á)B>Á6BÂB>ÂB9Â9B>Â>Cz/{session_id}/directorieszCreate Directoryc              ƒ   ó¶  #   • UR                  XR                  5      I S h  v•N $  N! [         a&  n[        [        R
+                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7fr8   )Úcreate_directoryr5   r<   r   r	   r*   r=   ÚFileExistsErrorÚHTTP_409_CONFLICTr?   r@   rA   rM   s       r   Úcreate_work_board_directoryrV   b   sÀ   é € ğ )×9Ñ9¸*ÇlÁlÓS×SĞ	SÑSøÜÓn¬Ä6×C^ÑC^ÔgjĞklÓgmÑ)nĞ#nûÜÓi¤}Ä×AYÑAYÔbeĞfgÓbhÑ'iĞ!iûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  CüsT   ‚Cƒ( ¡&¢( ¥C¦( ¨
+C²!AÁCÁ !BÂCÂB)Â)CÂ6CÃCÃCz/{session_id}/movezMove/Rename File or Directoryc              ƒ   ó(  #   • UR                  XR                  UR                  5      I S h  v•N $  N! [         a&  n[	        [
+        R                  [        U5      S9eS nAf[         a&  n[	        [
+        R                  [        U5      S9eS nAf[         a&  n[	        [
+        R                  [        U5      S9eS nAf[         a   n[	        [
+        R                  SU 3S9eS nAf[         a   n[	        [
+        R                  SU 3S9eS nAff = f7fr8   )Ú	move_itemÚsource_pathÚdestination_pathr<   r   r	   r+   r=   rT   rU   r>   r*   r?   r@   rA   rM   s       r   Úmove_work_board_itemr[   n   së   é € ğ )×2Ñ2°:×?RÑ?RĞT[×TlÑTlÓm×mĞ	mÑmøÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓi¤}Ä×AYÑAYÔbeĞfgÓbhÑ'iĞ!iûÜÓo¬-ÄF×D_ÑD_ÔhkĞlmÓhnÑ*oĞ$oûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  Cüs`   ‚Dƒ)3 ¬1­3 °D±3 ³
+D½!AÁDÁ+!BÂDÂ!B:Â:DÃC"Ã"DÃ/D
+Ä
+DÄD)1ÚloggingÚtypingr   Úfastapir   r   r   r   r   r	   r
+   Úacp_backend.configr   Úacp_backend.corer   r   r   r   Úacp_backend.core.fs_managerr   Ú acp_backend.core.session_handlerr   Ú$acp_backend.models.work_board_modelsr   r   r   r   r   Ú	getLoggerÚ__name__ÚloggerÚrouterr'   ÚTAG_WORKBOARDr   r   r=   r.   ÚgetrD   rI   ÚpostÚHTTP_201_CREATEDrN   ÚdeleteÚHTTP_204_NO_CONTENTrQ   rV   r[   r   r   r   Ú<module>rn      sç  ğã İ ß P× PÑ På 'å Eİ Oå 9İ ;÷õ ğ
+ 
+×	Ò	˜8Ó	$€Ù	‹€Ø!€Ø'€ğ&Ğ#4ô &ğ+¨ô +ñ /6Ğ6TÓ.UñsØğsà+õsğ ‡Ğ!°$°x±.ĞJfĞn{Ğm|ñ  MTğ  Unó  Moğ  Lp€ğ  qá˜3¨MÑ:ÙcĞ'AÑBÙ,3Ğ4MÓ,Nñ	CØğ	Cà
+ğ	Cğ *ô	Có qğ	Cğ ‡Ğ)Ğ:JĞTgĞo|Ğn}ñ  NUğ  Voó  Npğ  Mq€ğ  rá˜3¨MÑ:ÙcĞ'KÑLÙ,3Ğ4MÓ,Nñ
+CØğ
+Cà
+ğ
+Cğ *ô
+Có rğ
+Cğ ‡Ğ*¸8ĞQW×QhÑQhğ  sGğ  O\ğ  N]ñ  mtğ  uNó  mOğ  lP€ğ  Qá˜3¨MÑ:Ù $ S£	Ù,3Ğ4MÓ,Nñ	CØğ	Càğ	Cğ *ô	Có Qğ	Cğ ‡Ğ$°&×2LÑ2LĞVpğ  yFğ  xGñ  W^ğ  _xó  Wyğ  Vz€ğ  {á˜3¨MÑ:ÙcĞ'AÑBÙ,3Ğ4MÓ,NñØğà
+ğğ *ôó {ğğ ‡Ğ(¸Èv×OfÑOfğ  qCğ  KXğ  JYñ  ipğ  qJó  iKğ  hL€ğ  Má˜3¨MÑ:Ù&*¨3£iÙ,3Ğ4MÓ,Nñ	CØğ	Cà#ğ	Cğ *ô	Có Mğ	Cğ ‡Ğ!°(ĞDcĞkxĞjyñ  JQğ  Rkó  Jlğ  Im€ğ  ná˜3¨MÑ:Ù# C›yÙ,3Ğ4MÓ,Nñ
+CØğ
+Càğ
+Cğ *ô
+Có nñ
+Cr   ó
+    pÓ4hU  ã            
+       ó  • S SK r S SKrS SKrS SKJrJrJr  S SKJrJ	r	J
+r
+JrJrJr  S SKJr  S SKJrJr  S SKJr  S SKJrJr  S SKJrJrJrJrJr  \ R<                  " \5      r \" 5       r!S	r"S
+r#Sr$\" \5      4S\4S jjr%\!RM                  S\\   S\#/\" \%5      /S9\" \5      4S\4S jj5       r'\!RM                  S\\   S\#/\" \%5      /S9\" \5      4S\4S jj5       r(\!RS                  S\\RT                  S\#/\" \%5      /S9\
+" S5      \" \5      4S\S\4S jj5       r+\!RS                  S\S\#/\" \%5      /S9\" SSS9\" \5      4S \,S\4S! jj5       r-\!RM                  S"\S#\#/\" \%5      /S9\" SS$S9\" \5      4S \,S\4S% jj5       r.\!RS                  S&SS'\$/\" \%5      /S9\
+" S5      \" \5      4S\S\4S( jj5       r/g))é    N)ÚListÚAsyncGeneratorÚOptional)Ú	APIRouterÚHTTPExceptionÚBodyÚPathÚstatusÚDepends)ÚEventSourceResponse)ÚsettingsÚSettings)Ú
+LLMManager)Úget_llm_manager_dependencyÚget_settings_dependency)ÚLLMModelInfoÚLoadModelRequestÚChatCompletionRequestÚChatCompletionResponseÚChatCompletionChunkzLLM ServicezLLM Model ManagementzLLM Chat CompletionsÚcurrent_settingsc                 óœ   • U R                   (       d;  [        R                  [         S35        [	        [
+        R                  [         S3S9eg )Nz is disabled in configuration.z is currently disabled.©Ústatus_codeÚdetail)ÚENABLE_LLM_MODULEÚloggerÚwarningÚMODULE_NAMEr   r
+   ÚHTTP_503_SERVICE_UNAVAILABLE)r   s    Ú7/home/g/Ai/AiCockpit/acp_backend/routers/llm_service.pyÚ_check_module_enabledr"      sA   € Ø×-×-Ü‰œ+˜Ğ&DĞEÔFÜ¬×(KÑ(KÔWbĞVcĞczĞT{Ñ|Ğ|ğ .ó    z/models/availablezList Discoverable LLM Models)Úresponse_modelÚsummaryÚtagsÚdependenciesÚcurrent_llm_managerc              ƒ   óè   #   • U R                  5       I S h  v•N $  N! [         a   n[        [        R                  SU 3S9eS nAf[
+         a   n[        [        R                  SU 3S9eS nAff = f7f)Nz#Failed to access models directory: r   zFailed to list models: )Údiscover_modelsÚIOErrorr   r
+   ÚHTTP_500_INTERNAL_SERVER_ERRORÚ	Exception©r(   Úes     r!   Úlist_available_models_endpointr0      s™   é € à)×9Ñ9Ó;×;Ğ	;Ñ;øÜó  Rœ}¼×9^Ñ9^ğ  jMğ  NOğ  MPğ  hQñ   Rğ  RûÜó  H¤¼6×;`Ñ;`ğ  lCğ  DEğ  CFğ  jGñ  "Hğ  Hûğ  Hüs<   ‚A2ƒ –— šA2› 
+A/§AÁA/ÁA*Á*A/Á/A2z/models/loadedz List Currently Loaded LLM Modelsc              ƒ   ó˜   #   • U R                  5       I S h  v•N $  N! [         a   n[        [        R                  SU 3S9eS nAff = f7f)NzFailed to get loaded models: r   )Úget_loaded_modelsr-   r   r
+   r,   r.   s     r!   Úget_loaded_models_endpointr3   #   s]   é € à)×;Ñ;Ó=×=Ğ	=Ñ=øÜó  N¤¼6×;`Ñ;`ğ  lIğ  JKğ  ILğ  jMñ  "Nğ  Nûğ  Nüs0   ‚A
+ƒ –— šA
+› 
+A§AÁAÁA
+z/models/loadzLoad an LLM Model)r$   r   r%   r&   r'   .Úrequestc              ƒ   ó®  #   • UR                  U 5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7f)Nr   úUnexpected error: )Ú
+load_modelÚFileNotFoundErrorr   r
+   ÚHTTP_404_NOT_FOUNDÚstrÚ
+ValueErrorÚHTTP_400_BAD_REQUESTÚRuntimeErrorr,   r-   )r4   r(   r/   s      r!   Úload_llm_model_endpointr>   (   s·   é € à)×4Ñ4°WÓ=×=Ğ	=Ñ=øÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûÜÓs¤M¼f×>cÑ>cÔloĞpqÓlrÑ$sĞsûÜó  C¤¼6×;`Ñ;`Ğk}Ğ~ğ  ~Ağ  jBñ  "Cğ  Cûğ  CüsT   ‚Cƒ —˜ ›Cœ 
+C¨!A	Á	CÁ!A7Á7CÂ!B%Â%CÂ2CÃCÃCz/models/unload/{model_id}zUnload an LLM ModelzID of model to unload.)ÚdescriptionÚmodel_idc              ƒ   óö   #   • UR                  U 5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7f)Nr   zFailed to unload model: )Úunload_modelr;   r   r
+   r9   r:   r-   r,   )r@   r(   r/   s      r!   Úunload_llm_model_endpointrC   0   s   é € à)×6Ñ6°xÓ@×@Ğ	@Ñ@øÜÓe¤-¼F×<UÑ<UÔ^aĞbcÓ^dÑ"eĞeûÜó  I¤¼6×;`Ñ;`ğ  lDğ  EFğ  DGğ  jHñ  "Iğ  Iûğ  Iüs<   ‚A9ƒ —˜ ›A9œ 
+A6¨!A	Á	A6ÁA1Á1A6Á6A9z/models/{model_id}z#Get Details of a Specific LLM ModelzID of the model.c              ƒ   óŠ   #   • UR                  U 5      I S h  v•N nU(       d  [        [        R                  SU  S3S9eU$  N)7f)Nz
+Model ID 'z' not found.r   )Úget_model_detailsr   r
+   r9   )r@   r(   Údetailss      r!   Úget_model_details_endpointrG   6   sE   é € à'×9Ñ9¸(ÓC×C€GŞÜ¬×(AÑ(AÈJĞW_ĞV`Ğ`lĞJmÑnĞnØ€Nñ Dùs   ‚A—A˜*Az/chat/completionszCreate Chat Completionc              ƒ   ól  ^ ^#   • TR                  T R                  5      I S h  v•N nU(       a  UR                  (       d&  [        [        R
+                  ST R                   S3S9eT R                  (       a  UU 4S jn[        U" 5       SS9$  TR                  T 5      I S h  v•N $  Nƒ N! [         a&  n[        [        R
+                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAff = f7f)NzModel 'z' not loaded.r   c                 ó:  >#   •  TR                  T5        S h  v•N n S[        R                  " U 5      07v •  M&   N!
+ g ! [         aN  n[        R                  SU 3SS9  S[        U5      SS.0nS[        R                  " U5       S	37v •   S nAg S nAff = f7f)
+NÚdataz#Error during SSE event generation: T)Úexc_infoÚerrorÚstream_error)ÚmessageÚtypezevent: error
+data: z
+
+)Ústream_process_chat_completionÚjsonÚdumpsr-   r   rL   r:   )Úchunkr/   Úerror_payloadr(   r4   s      €€r!   Úevent_generatorÚ8create_chat_completion_endpoint.<locals>.event_generatorK   s—   øé € ğMØ#6×#UÑ#UĞV]Ô#^÷ 6˜%Ø!¤4§:¢:¨eÓ#4Ğ5Õ5ñ6Ñ#^øäó MÜ—‘ĞBÀ1À#ĞFĞQUÑVØ!(´c¸!³fÀnÑ*UĞ VØ,¬T¯ZªZ¸Ó-FĞ,GÀtĞL×LĞLûğMüsH   ƒB…A  –>š<›>A  ¼>¾A  ¿BÁ 
+BÁ
+ABÂBÂBÂBztext/event-stream)Ú
+media_typer6   )rE   r@   Úloadedr   r
+   r<   Ústreamr   Úprocess_chat_completionr;   r:   r=   r,   r-   )r4   r(   Ú
+model_inforU   r/   s   ``   r!   Úcreate_chat_completion_endpointr\   =   s  ùé € ğ +×<Ñ<¸W×=MÑ=MÓN×N€Jö ˜Z×.×.ä¬×(CÑ(CÈgĞV]×VfÑVfĞUgĞgtĞLuÑvĞvà‡~‡~ö	Mô #¡?Ó#4ĞATÑUĞUğ	GØ,×DÑDÀWÓM×MĞMñ- Oñ, NøÜÓk¤mÄ×@[Ñ@[ÔdgĞhiÓdjÑ&kĞ kûÜÓw¬Ä&×BgÑBgÔpsĞtuÓpvÑ(wĞ"wûÜó  	G¤]¼v×?dÑ?dğ  pBğ  CDğ  BEğ  nFñ  &Gğ   Gûğ  	Güs^   „D4£B'¤A)D4ÂB+ Â"B)Â#B+ Â&D4Â)B+ Â+
+D1Â5!CÃD1Ã#!DÄD1ÄD,Ä,D1Ä1D4)0ÚloggingrQ   ÚsysÚtypingr   r   r   Úfastapir   r   r   r	   r
+   r   Ússe_starlette.sser   Úacp_backend.configr   r   Úacp_backend.core.llm_managerr   Úacp_backend.dependenciesr   r   Úacp_backend.models.llm_modelsr   r   r   r   r   Ú	getLoggerÚ__name__r   Úrouterr   ÚTAG_LLM_MODEL_MGMTÚTAG_LLM_CHATr"   Úgetr0   r3   ÚpostÚHTTP_200_OKr>   r:   rC   rG   r\   © r#   r!   Ú<module>ro      sH  ğã Û Û 
+ß 1Ñ 1ß I× Iİ 1ç 1İ 3ß X÷õ ğ
+ 
+×	Ò	˜8Ó	$€Ù	‹€Ø€Ø+Ğ Ø%€á7>Ğ?VÓ7Wñ }¨Hõ }ğ
+ ‡Ğ°°\Ñ0BĞLjğ  sEğ  rFñ  V]ğ  ^só  Vtğ  Uu€ğ  vÙKRĞSmÓKnñ H¸jô Hó vğHğ
+ ‡Ğ¨T°,Ñ-?ĞIkğ  tFğ  sGñ  W^ğ  _tó  Wuğ  Vv€ğ  wÙGNĞOiÓGjñ N¸*ô Nó wğNğ ‡ˆ^¨LÀf×FXÑFXĞbuğ  ~Pğ  }Qñ  ahğ  i~ó  ağ  `@€ğ  AÙ>BÀ3»iÑkrğ  tNó  lOñ CĞ+;ğ CĞ^hô Có AğCğ ‡Ğ(¸ĞOdĞl~Ğkñ  PWğ  Xmó  Pnğ  Oo€ğ  pÙ48¸ĞJbÑ4cñ  HOğ  Pjó  Hkñ I¨cğ Iğ  {Eô Ió pğIğ
+ ‡Ğ °ĞGlğ  uGğ  tHñ  X_ğ  `uó  Xvğ  Ww€ğ  xÙ59¸#ĞK]Ñ5^ñ  CJğ  Keó  Cfñ ¨sğ Ğuô ó xğğ ‡Ğ °Ğ?WĞ_kĞ^lñ  }Dğ  EZó  }[ğ  |\€ğ  ]ÙKOĞPSË9Ñxğ  A[ó  y\ñ GĞ3Hğ GĞkuô Gó ]ñGr#   ó
+    ê2h°  ã                   ó  • S SK r S SKJrJrJr  S SKJrJr  S SKJ	r	J
+r
+  \ R                  " \5      r\" 5       rSrSrS r\R%                  S\	S	\/S
+9S 5       r\R%                  S\
+S\/S
+9S 5       r\R%                  S\S\/S
+9S 5       rg)é    N)Ú	APIRouterÚHTTPExceptionÚstatus)ÚsettingsÚSettings)ÚStatusResponseÚPingResponsezSystem ServicezSystem Informationc                  ó¤   • [         R                  (       d;  [        R                  [         S35        [        [        R                  [         S3S9eg )Nz is disabled in configuration.z is currently disabled.)Ústatus_codeÚdetail)r   ÚENABLE_SYSTEM_MODULEÚloggerÚwarningÚMODULE_NAMEr   r   ÚHTTP_503_SERVICE_UNAVAILABLE© ó    Ú2/home/g/Ai/AiCockpit/acp_backend/routers/system.pyÚ_check_module_enabledr      sE   € Ü×(×(Ü‰œ+˜Ğ&DĞEÔFÜÜ×;Ñ;Ü!]Ğ"9Ğ:ñ
+ğ 	
+ğ )r   z/statusz Get System Status and Basic Info)Úresponse_modelÚsummaryÚtagsc            
+   ƒ   ó  #   • [        5         [        R                  S5        [        R                  [        R                  (       a  SOSS.[        R
+                  [        R
+                  (       a  SOSS.[        R                  [        R                  (       a  SOSS.[        R                  [        R                  (       a  SOSS.S.n Sn[        U[        R                   S[        R                   S3[        R                  [        R                  [        R                  [        R                  (       a  [        R                  OSU S	.S
+9$ 7f)NzRequest for system status.ÚokÚdisabled)Úenabledr   )Úllm_serviceÚagents_serviceÚwork_sessions_serviceÚwork_board_servicez vz is running.zN/A (LLM Module Disabled))Úapplication_nameÚapplication_versionÚ
+debug_modeÚconfigured_llm_backendÚmodules)r   ÚmessageÚdetails)r   r   Údebugr   ÚENABLE_LLM_MODULEÚENABLE_AGENT_MODULEÚENABLE_WORK_SESSION_MODULEÚENABLE_WORK_BOARD_MODULEr   ÚAPP_NAMEÚAPP_VERSIONÚ
+DEBUG_MODEÚLLM_BACKEND_TYPE)Úenabled_modules_statusÚapplication_statuss     r   Úget_system_statusr3      s   é € ô ÔÜ
+‡LLĞ-Ô.ô $,×#=Ñ#=ÔQY×Qk×QkÉĞq{Ñ|Ü&.×&BÑ&BÔV^×Vr×VrÉdğ  yCñ  DÜ-5×-PÑ-PÔdl÷  eH÷  eHÑ\`ğ  NXñ  "YÜ*2×*KÑ*KÔ_g÷  `A÷  `AÑW[ğ  GQñ  Rñ	Ğğ ĞäØ!Ü×$Ñ$Ğ% R¬×(<Ñ(<Ğ'=¸\ĞJä (× 1Ñ 1Ü#+×#7Ñ#7Ü"×-Ñ-ÜCK×C]×C]¤h×&?Ò&?Ğc~Ø-ñ
+ñ
+ğ 
+ùs   ‚EEz/pingzPing System for Liveness Checkc               ƒ   ó\   #   • [        5         [        R                  S5        [        5       $ 7f)Nz$Ping request received, sending pong.)r   r   r(   r	   r   r   r   Úping_systemr5   2   s"   é € ô ÔÜ
+‡LLĞ7Ô8Ü‹>Ğùs   ‚*,z/config/viewz1View System Configuration (Review for Production)c               ƒ   óT   #   • [        5         [        R                  S5        [        $ 7f)a–  
+Displays the current system configuration settings loaded from environment
+variables and defaults. 
+
+**Caution**: This endpoint returns the full `Settings` object. 
+In a production environment, ensure that sensitive values (e.g., API keys like 
+`SERPER_API_KEY`) are not inadvertently exposed. Consider using a separate response 
+model that excludes sensitive fields or implementing proper authorization.
+z%Request to view system configuration.)r   r   Úinfor   r   r   r   Úget_system_config_viewr8   =   s!   é € ô  Ôô
+ ‡KKĞ7Ô8Ü€Oùs   ‚&()ÚloggingÚfastapir   r   r   Úacp_backend.configr   r   Úacp_backend.models.commonr   r	   Ú	getLoggerÚ__name__r   Úrouterr   ÚTAG_SYSTEM_INFOr   Úgetr3   r5   r8   r   r   r   Ú<module>rB      sÍ   ğÛ ß 4Ñ 4ß 1ß Bà	×	Ò	˜8Ó	$€Ù	‹€Ø€Ø&€ò
+ğ ‡ØØ!Ø.Ø
+Ğ	ğ	 ğ ñóğğ2 ‡ØØØ,Ø
+Ğ	ğ	 ğ ñóğğ
+ ‡ØØØ?Ø
+Ğ	ğ	 ğ ñóñr   ó
+    ®‘2hE   ã                   ó   • g )N© r   ó    Ú4/home/g/Ai/AiCockpit/acp_backend/routers/__init__.pyÚ<module>r      s   ñr   ó
+    4hğ  ã                   óÀ  • S SK r S SKJr  S SKJrJrJrJrJrJ	r	  S SK
+Jr  S SKJr  S SKJr  S SKJrJrJr  \ R*                  " \5      r\" 5       rSrS	rS
+\4S jrS r\R;                  S\\R<                  S\/S9\" S5      \	" \5      4S\S\4S jj5       r\RA                  S\\   S\/S9\	" \5      4S\4S jj5       r!\RA                  S\S\/S9\" SSS9\	" \5      4S\"S\4S jj5       r#\RI                  S\S\/S9\" SSS9\" S5      \	" \5      4S\"S\S\4S  jj5       r%\RM                  SS\RN                  S!\/S9\" SS"S9\	" \5      4S\"S\4S# jj5       r(g)$é    N)ÚList)Ú	APIRouterÚHTTPExceptionÚBodyÚPathÚstatusÚDepends)Úsettings)ÚSessionHandler)Úsession_handler)ÚWorkSessionÚCreateWorkSessionRequestÚUpdateWorkSessionRequestzWork Sessions ServicezWork Session ManagementÚreturnc                  ó~   • [         (       d-  [        R                  S5        [        [        R
+                  SS9e[         $ )Nz2SessionHandler (global instance) is not available.z1Work session service is not properly initialized.©Ústatus_codeÚdetail)Úglobal_session_handler_instanceÚloggerÚcriticalr   r   ÚHTTP_503_SERVICE_UNAVAILABLE© ó    Ú9/home/g/Ai/AiCockpit/acp_backend/routers/work_sessions.pyÚget_session_handler_dependencyr      s6   € ß*Ò*Ü‰ĞLÔMÜÜ×;Ñ;ØFñ
+ğ 	
+ô +Ğ*r   c                  ó¤   • [         R                  (       d;  [        R                  [         S35        [        [        R                  [         S3S9eg )Nz is disabled in configuration.z is currently disabled.r   )r
+   ÚENABLE_WORK_SESSION_MODULEr   ÚwarningÚMODULE_NAMEr   r   r   r   r   r   Ú_check_module_enabledr!      sE   € Ü×.×.Ü‰œ+˜Ğ&DĞEÔFÜÜ×;Ñ;Ü!]Ğ"9Ğ:ñ
+ğ 	
+ğ /r   Ú/zCreate a New Work Session)Úresponse_modelr   ÚsummaryÚtags.ÚrequestÚhandlerc              ƒ   óX  #   • [        5         [        R                  SU R                   S35         UR	                  U 5      I S h  v•N n[        R                  SUR                   SUR
+                   S35        U$  N6! [         aJ  n[        R                  SU R                   SU 3SS	9  [        [        R                  [        U5      S
+9eS nAf[         aM  n[        R                  SU R                   SU 3SS	9  [        [        R                  S[        U5       3S
+9eS nAff = f7f)Nz/Request to create new work session with name: 'Ú'úWork session 'z' (ID: z) created successfully.z%Runtime error creating work session 'ú': T©Úexc_infor   z(Unexpected error creating work session 'úAn unexpected error occurred: )r!   r   ÚinfoÚnameÚcreate_sessionÚ
+session_idÚRuntimeErrorÚerrorr   r   ÚHTTP_500_INTERNAL_SERVER_ERRORÚstrÚ	Exception)r&   r'   Únew_sessionÚes       r   Úcreate_new_work_sessionr:   &   s  é € ô ÔÜ
+‡KKĞAÀ'Ç,Á,ÀÈqĞQÔRğ	AØ#×2Ñ2°7Ó;×;ˆÜ‰n [×%5Ñ%5Ğ$6°g¸k×>TÑ>TĞ=UĞUlĞmÔnØĞñ <øô ó ^Ü‰Ğ<¸W¿\¹\¸NÈ#ÈaÈSĞQĞ\`ˆÑaÜ¬×(MÑ(MÔVYĞZ[ÓV\Ñ]Ğ]ûÜó AÜ‰Ğ?ÀÇÁ¸~ÈSĞQRĞPSĞTĞ_cˆÑdÜ¬×(MÑ(MĞXvÔwzĞ{|Ów}Ğv~ĞVñ  Ağ  	AûğAüsH   ‚.D*±A> ÁA<Á5A> Á;D*Á<A> Á>
+D'ÂACÃD'ÃAD"Ä"D'Ä'D*zList All Work Sessions)r#   r$   r%   c              ƒ   óğ  #   • [        5         [        R                  S5         U R                  5       I S h  v•N n[        R                  S[	        U5       S35        U$  N(! [
+         a@  n[        R                  SU 3SS9  [        [        R                  S[        U5       3S9eS nAf[         a@  n[        R                  S	U 3SS9  [        [        R                  S
+[        U5       3S9eS nAff = f7f)Nz"Request to list all work sessions.z
+Returning z work sessions.z!I/O error listing work sessions: Tr,   z*Failed to list sessions due to I/O error: r   zError listing work sessions: zFailed to list work sessions: )r!   r   ÚdebugÚlist_sessionsÚlenÚIOErrorr4   r   r   r5   r6   r7   )r'   Úsessionsr9   s      r   Úlist_all_work_sessionsrA   >   s  é € ô ÔÜ
+‡LLĞ5Ô6ğ	AØ ×.Ñ.Ó0×0ˆÜ‰z¤# h£- °Ğ@ÔAØˆñ 1øô ó MÜ‰Ğ8¸¸Ğ<ÀtˆÑLÜ¬×(MÑ(Mğ  YCô  DGğ  HIó  DJğ  CKğ  WLñ  Mğ  	MûÜó AÜ‰Ğ4°Q°CĞ8À4ˆÑHÜ¬×(MÑ(MĞXvÔwzĞ{|Ów}Ğv~ĞVñ  Ağ  	AûğAüsD   ‚ C6£A! ¶A·'A! ÁC6ÁA! Á!
+C3Á+;B&Â&C3Â3;C.Ã.C3Ã3C6z/{session_id}z&Get Details of a Specific Work Sessionz"The unique ID of the work session.)Údescriptionr2   c              ƒ   ó’  #   • [        5         [        R                  SU  35         UR                  U 5      I S h  v•N nU(       d5  [        R                  SU  S35        [        [        R                  SU  S3S9eU$  NB! [         a;  n[        R                  SU  SU 35        [        [        R                  SU  3S9eS nAff = f7f)	Nz"Request for work session details: z/Get session failed: Invalid session ID format 'r+   úInvalid session ID format: r   zWork session ID 'z' not found.úWork Session ID ')
+r!   r   r<   Úget_sessionÚ
+ValueErrorr   r   r   ÚHTTP_400_BAD_REQUESTÚHTTP_404_NOT_FOUND)r2   r'   ÚsessionÚves       r   Úget_work_session_detailsrL   T   sÊ   é € ô ÔÜ
+‡LLĞ5°j°\ĞBÔCğxØ×+Ñ+¨JÓ7×7ˆö
+ Ü‰Ğ*¨:¨,°lĞCÔDÜ¬×(AÑ(AĞL]Ğ^hĞ]iĞiuĞJvÑwĞwØ€Nñ 8øÜó xÜ‰ĞHÈÈĞTWĞXZĞW[Ğ\Ô]Ü¬×(CÑ(CĞNiĞjtĞiuĞLvÑwĞwûğxüs7   ‚#C¦A? ºA=»A? ¿>CÁ=A? Á?
+CÂ	6B?Â?CÃCzUpdate an Existing Work Sessionz%The ID of the work session to update.Úupdate_datac           	   ƒ   óä  #   • [        5         [        R                  SU  SUR                  SS9 35         UR	                  X5      I S h  v•N nU(       d5  [        R                  S	U  S
+35        [        [        R                  SU  S3S9e[        R                  SU  S35        U$  N[! [
+         a;  n[        R                  SU  SU 35        [        [        R                  SU  3S9eS nAff = f7f)Nz Request to update work session: z with data: T)Úexclude_unsetz2Update session failed: Invalid session ID format 'r+   rD   r   zFailed to update work session 'z+'. It might not exist or an error occurred.rE   z$' not found or could not be updated.r*   z' updated successfully.)r!   r   r/   Ú
+model_dumpÚupdate_sessionrG   r   r   r   rH   rI   )r2   rM   r'   Úupdated_sessionrK   s        r   Úupdate_work_session_detailsrS   k   s  é € ô ÔÜ
+‡KKĞ2°:°,¸lÈ;×KaÑKaĞptĞKaĞKuĞJvĞwÔxğxØ '× 6Ñ 6°zÓ O×Oˆö
+ Ü‰Ğ8¸¸ĞDoĞpÔqÜ¬×(AÑ(AĞL]Ğ^hĞ]iğ  jNğ  KOñ  Pğ  	PÜ
+‡KK.  Ğ,CĞDÔEØĞñ PøÜó xÜ‰ĞKÈJÈ<ĞWZĞ[]ĞZ^Ğ_Ô`Ü¬×(CÑ(CĞNiĞjtĞiuĞLvÑwĞwûğxüs;   ‚3C0¶B( Á
+B&ÁB( ÁAC0Â&B( Â(
+C-Â26C(Ã(C-Ã-C0zDelete a Work Sessionz%The ID of the work session to delete.c              ƒ   óè  #   • [        5         [        R                  SU  35         UR                  U 5      I S h  v•N nU(       d5  [        R	                  SU  S35        [        [        R                  SU  S3S9e[        R                  SU  S35        g  NZ! [         a;  n[        R                  S	U  S
+U 35        [        [        R                  SU  3S9eS nAf[         a@  n[        R	                  SU  S
+U 3SS9  [        [        R                  [        U5      S9eS nAf[         aC  n[        R	                  SU  S
+U 3SS9  [        [        R                  S[        U5       3S9eS nAff = f7f)Nz Request to delete work session: zFailed to delete work session 'z#' due to an internal storage error.zCould not delete session 'z'.r   r*   z' processed for deletion.z2Delete session failed: Invalid session ID format 'r+   rD   zDelete session failed for 'Tr,   z#Unexpected error deleting session 'r.   )r!   r   r/   Údelete_sessionr4   r   r   r5   rG   r   rH   r?   r6   r7   )r2   r'   Údeleted_successfullyrK   Úioer9   s         r   Údelete_work_session_by_idrX   „   sŠ  é € ô ÔÜ
+‡KKĞ2°:°,Ğ?Ô@ğAØ%,×%;Ñ%;¸JÓ%G×GĞŞ#ÜL‰LĞ:¸:¸,ĞFiĞjÔkÜ¬F×,QÑ,QĞ\vğ  xBğ  wCğ  CEğ  [Fñ  Gğ  GÜ‰n Z LĞ0IĞJÔKØñ  Høô ó xÜ‰ĞKÈJÈ<ĞWZĞ[]ĞZ^Ğ_Ô`Ü¬×(CÑ(CĞNiĞjtĞiuĞLvÑwĞwûÜó VÜ‰Ğ2°:°,¸cÀ#ÀĞGĞRVˆÑWÜ¬×(CÑ(CÌCĞPSËHÑUĞUûÜó AÜ‰Ğ:¸:¸,ÀcÈ!ÈĞMĞX\ˆÑ]Ü¬×(MÑ(MĞXvÔwzĞ{|Ów}Ğv~ĞVñ  Ağ  	AûğAüsQ   ‚#E2¦B ºB»AB ÂE2ÂB Â
+E/Â!6CÃE/Ã$;DÄE/Ä,>E*Å*E/Å/E2))ÚloggingÚtypingr   Úfastapir   r   r   r   r   r	   Úacp_backend.configr
+   Ú acp_backend.core.session_handlerr   Úacp_backend.corer   r   Ú&acp_backend.models.work_session_modelsr   r   r   Ú	getLoggerÚ__name__r   Úrouterr    ÚTAG_SESSIONSr   r!   ÚpostÚHTTP_201_CREATEDr:   ÚgetrA   r6   rL   ÚputrS   ÚdeleteÚHTTP_204_NO_CONTENTrX   r   r   r   Ú<module>rj      s"  ğã İ ß I× Iå 'å ;İ O÷ñ ğ 
+×	Ò	˜8Ó	$€Ù	‹€Ø%€Ø(€ğ+¨ô +ò
+ğ ‡ØØØ×'Ñ'Ø'Ø
+ˆğ ğ ñ )-¨S«	Ù%Ğ&DÓEñAØ%ğAàôAóğAğ" ‡ØØ˜Ñ$Ø$Ø
+ˆğ	 ğ ñ &Ğ&DÓEñAØôAóğAğ  ‡ØØØ4Ø
+ˆğ	 ğ ñ ˜3Ğ,PÑQÙ%Ğ&DÓEñØğàôóğğ" ‡ØØØ-Ø
+ˆğ	 ğ ñ ˜3Ğ,SÑTÙ,0°«IÙ%Ğ&DÓEñØğà)ğğ ôóğğ& ‡ØØØ×*Ñ*Ø#Ø
+ˆğ ğ ñ ˜3Ğ,SÑTÙ%Ğ&DÓEñAØğAàôAóñAr   ó
+    pÓ4h”=  ã                   ó`  • S SK r S SKrS SKrS SKJrJrJr  S SKJrJ	r	J
+r
+JrJrJr  S SKJr  S SKJrJr  S SKJr  S SKJr  S SKJr  S S	KJrJrJrJr  S S
+KJ r J!r!J"r"J#r#  \ RH                  " \%5      r&\" 5       r'Sr(Sr)Sr*Sr+\" \5      4S\4S jjr,\'R[                  S\ \R\                  S\)/\" \,5      /S9\
+" S5      \" \5      4S\ S\4S jj5       r/\'Ra                  S\ S\)/\" \,5      /S9\" S5      \" \5      4S\1S\4S jj5       r2\'Ra                  S\\    S\)/\" \,5      /S9\" \5      4S\4S jj5       r3\'Ri                  S\ S\)/\" \,5      /S9\" S5      \
+" S5      \" \5      4S\1S \ S\4S! jj5       r5\'Rm                  S\Rn                  S"\)/\" \,5      /S#9\" S5      \" \5      4S\1S\4S$ jj5       r8S%r9\'R[                  \9 S&3\ \R\                  S'\*/\" \,5      /S9\" S5      \
+" S5      \" \5      4S(\1S\ S\4S) jj5       r:\'Ra                  \9 S*3\ S+\*/\" \,5      /S9\" S5      \" S5      \" \5      4S(\1S\1S\4S, jj5       r;\'Ra                  \9 S&3\\    S-\*/\" \,5      /S9\" S5      \" \5      4S(\1S\4S. jj5       r<\'Ri                  \9 S*3\ S/\*/\" \,5      /S9\" S5      \" S5      \
+" S5      \" \5      4S(\1S\1S \ S\4S0 jj5       r=\'Rm                  \9 S*3\Rn                  S1\*/\" \,5      /S#9\" S5      \" S5      \" \5      4S(\1S\1S\4S2 jj5       r>\'R[                  S3\"S4\+/\" \,5      /S9\
+" S5      \" \5      4S5\!S6\4S7 jj5       r?\'R[                  S8S9\+/\" \,5      /S:9\
+" S5      \" \5      \" \5      \" \5      \" \5      4S5\!S\S6\S\S;\\   4
+S< jj5       r@g)=é    N)ÚListÚAsyncGeneratorÚOptional)Ú	APIRouterÚHTTPExceptionÚBodyÚPathÚstatusÚDepends)ÚEventSourceResponse)ÚsettingsÚSettings)ÚAgentConfigHandler)ÚAgentExecutor)Ú
+LLMManager)Ú#get_agent_config_handler_dependencyÚget_agent_executor_dependencyÚget_llm_manager_dependencyÚget_settings_dependency)ÚAgentConfigÚRunAgentRequestÚAgentRunStatusÚAgentOutputChunkzAgents ServicezAgent Configuration (Global)z$Agent Configuration (Session-Scoped)zAgent ExecutionÚcurrent_settingsc                 óœ   • U R                   (       d;  [        R                  [         S35        [	        [
+        R                  [         S3S9eg )Nz is disabled in configuration.z is currently disabled.©Ústatus_codeÚdetail)ÚENABLE_AGENT_MODULEÚloggerÚwarningÚMODULE_NAMEr   r
+   ÚHTTP_503_SERVICE_UNAVAILABLE)r   s    Ú2/home/g/Ai/AiCockpit/acp_backend/routers/agents.pyÚ_check_module_enabledr%   !   sA   € Ø×/×/Ü‰œ+˜Ğ&DĞEÔFÜ¬×(KÑ(KÔWbĞVcĞczĞT{Ñ|Ğ|ğ 0ó    z/configs/globalz!Create Global Agent Configuration)Úresponse_modelr   ÚsummaryÚtagsÚdependencies.Úconfig_payloadÚhandlerc              ƒ   ó$  #   •  UR                  U R                  5      I S h  v•N (       a&  [        [        R                  SU R                   S3S9eUR                  U 5      I S h  v•N   UR                  U R                  5      I S h  v•N nU(       d  [        [        R                  SS9eU$  NŒ NJ N)! [         a   n[        [        R                  SU 3S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)NúGlobal agent ID 'z' already exists.r   ú Failed to retrieve after saving.ú	IOError: )Úget_global_agent_configÚagent_idr   r
+   ÚHTTP_409_CONFLICTÚsave_global_agent_configÚHTTP_500_INTERNAL_SERVER_ERRORÚIOErrorÚ
+ValueErrorÚHTTP_400_BAD_REQUESTÚstr)r+   r,   Úpersisted_configÚes       r$   Ú!create_global_agent_configurationr<   &   s!  é € ğhØ×0Ñ0°×1HÑ1HÓI×IÕIÔQ^Ôkq÷  lDñ  lDğ  O`ğ  ao÷  axñ  axğ  `yğ  yJğ  MKñ  RLğ  LLØ×.Ñ.¨~Ó>×>Ğ>Ø!(×!@Ñ!@À×AXÑAXÓ!Y×YĞŞ¤}Ä×AfÑAfğ  pRñ  (Sğ  "SØĞñ	 JÙ>ÙYøô Ówœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüsi   ‚D„B5 ¢B/£AB5 Á&B1Á'"B5 Â	B3Â
+$B5 Â.DÂ/B5 Â1B5 Â3B5 Â5
+DÂ?CÃDÃ'!DÄDÄDz/configs/global/{agent_id}zGet Global Agent Configuration)r'   r(   r)   r*   r2   c              ƒ   óğ   #   • UR                  U 5      I S h  v•N nU(       d  [        [        R                  SU  S3S9eU$  N)! [         a&  n[        [        R                  [        U5      S9eS nAff = f7f)Nr   r.   ú' not found.)r1   r7   r   r
+   r8   r9   ÚHTTP_404_NOT_FOUND)r2   r,   Úconfigr;   s       r$   Úget_global_agent_configurationrA   1   so   é € à×7Ñ7¸ÓA×Aˆæœ´6×3LÑ3LĞWhĞiqĞhrĞr~ĞUñ  Ağ  AØ€Mñ BøÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüs7   ‚A6ƒA —A˜A œ%A6ÁA Á
+A3Á!A.Á.A3Á3A6z$List All Global Agent Configurationsc              ƒ   ó>   #   • U R                  5       I S h  v•N $  N7f)N)Úlist_global_agent_configs)r,   s    r$   Ú$list_all_global_agent_configurationsrD   8   s   é € à×2Ñ2Ó4×4Ğ4Ñ4ùs   ‚–—z!Update Global Agent ConfigurationÚconfig_update_payloadc              ƒ   ó\  #   • XR                   :w  a  [        [        R                  SS9e UR	                  U 5      I S h  v•N nU(       d  [        [        R
+                  SU  S3S9eUR                  Ul        UR                  U5      I S h  v•N   UR	                  U 5      I S h  v•N nU(       d  [        [        R                  SS9eU$  N‹ N@ N)! [         a   n[        [        R                  SU 3S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)NúPath ID vs body ID mismatch.r   r.   r>   ú Failed to retrieve after update.r0   )r2   r   r
+   r8   r1   r?   Ú
+created_atr4   r5   r6   r7   r9   )r2   rE   r,   Úexisting_configÚupdated_configr;   s         r$   Ú!update_global_agent_configurationrL   <   s-  é € à×1Ñ1Ó1¼ÔSY×SnÑSnğ  xVñ  :Wğ  4Wğ	hØ '× ?Ñ ?ÀÓ I×IˆŞ¤mÄ×@YÑ@YĞduĞv~Ğuğ  @Lğ  cMñ  'Nğ  !NØ+:×+EÑ+EĞÔ(Ø×.Ñ.Ğ/DÓE×EĞEØ&×>Ñ>¸xÓH×HˆŞ¤]¼v×?dÑ?dğ  nPñ  &Qğ   QØĞñ Jñ 	FÙHøô Ówœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüsj   ‚(D,«C ¿CÁ AC ÂCÂC Â%CÂ&$C Ã
+D,ÃC ÃC ÃC Ã
+D)ÃC6Ã6D)Ä!D$Ä$D)Ä)D,z!Delete Global Agent Configuration)r   r(   r)   r*   c              ƒ   óæ   #   •  UR                  U 5      I S h  v•N (       d  [        [        R                  SS9e g  N#! [         a&  n[        [        R
+                  [        U5      S9eS nAff = f7f©NzDeletion failed unexpectedly.r   )Údelete_global_agent_configr   r
+   r5   r7   r8   r9   )r2   r,   r;   s      r$   Ú!delete_global_agent_configurationrP   J   sh   é € ğhØ×7Ñ7¸ÓA×AÕAÜ¬F×,QÑ,QĞZyÑzĞzğ Bğ ñ BøäÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüs1   ‚A1„> ˜<™!> ºA1¼> ¾
+A.Á!A)Á)A.Á.A1z/sessions/{session_id}/agentsz/configsz)Create Session-Scoped Agent ConfigurationÚ
+session_idc              ƒ   ó†  #   •  UR                  XR                  5      I S h  v•N (       a)  [        [        R                  SUR                   SU  S3S9eUR                  X5      I S h  v•N   UR                  XR                  5      I S h  v•N nU(       d  [        [        R                  SS9eU$  N NJ N)! [         a&  n[        [        R                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)NúLocal agent ID 'z' already exists in session 'ú'.r   r/   r0   )Úget_local_agent_configr2   r   r
+   r3   Úsave_local_agent_configr5   ÚFileNotFoundErrorr?   r9   r6   r7   r8   )rQ   r+   r,   r:   r;   s        r$   Ú create_local_agent_configurationrX   S   s7  é € ğ	hØ×/Ñ/°
+×<SÑ<SÓT×TÕTÜ¬F×,DÑ,DĞO_Ğ`n×`wÑ`wĞ_xğ  yVğ  Wağ  Vbğ  bdğ  Neñ  fğ  fØ×-Ñ-¨jÓI×IĞIØ!(×!?Ñ!?À
+×LcÑLcÓ!d×dĞŞ¤}Ä×AfÑAfğ  pRñ  (Sğ  "SØĞñ UáIÙdøô Ól¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüsu   ‚E„B8 ¢B2£AB8 Á)B4Á*"B8 ÂB6Â$B8 Â1EÂ2B8 Â4B8 Â6B8 Â8
+D>Ã!C#Ã#D>Ã0DÄD>Ä!D9Ä9D>Ä>Ez/configs/{agent_id}z&Get Session-Scoped Agent Configurationc              ƒ   óR  #   • UR                  X5      I S h  v•N nU(       d  [        [        R                  SU SU  S3S9eU$  N,! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)Nr   rS   ú' not found in session 'rT   )rU   rW   r   r
+   r?   r9   r7   r8   )rQ   r2   r,   r@   r;   s        r$   Úget_local_agent_configurationr[   `   s®   é € à×6Ñ6°zÓL×Lˆö œ´6×3LÑ3LĞWgĞhpĞgqğ  rJğ  KUğ  JVğ  VXğ  VYñ  Zğ  ZØ€Mñ	 MøÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüsC   ‚B'ƒA —A˜A œ(B'ÁA Á
+B$Á!A1Á1B$Á>!BÂB$Â$B'z,List All Session-Scoped Agent Configurationsc              ƒ   ó  #   • UR                  U 5      I S h  v•N $  N! [         a&  n[        [        R                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)Nr   )Úlist_local_agent_configsrW   r   r
+   r?   r9   r7   r8   )rQ   r,   r;   s      r$   Úlist_local_agent_configurationsr^   h   s`   é € à×6Ñ6°zÓB×BĞ	BÑBøÜÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüs<   ‚A?ƒ —˜ ›A?œ 
+A<¨!A	Á	A<Á!A7Á7A<Á<A?z)Update Session-Scoped Agent Configurationc              ƒ   ó¾  #   • XR                   :w  a  [        [        R                  SS9e UR	                  X5      I S h  v•N nU(       d  [        [        R
+                  SU SU  S3S9eUR                  Ul        UR                  X5      I S h  v•N   UR	                  X5      I S h  v•N nU(       d  [        [        R                  SS9eU$  N N@ N)! [         a&  n[        [        R
+                  [        U5      S9eS nAf[         a   n[        [        R                  SU 3S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7f)NrG   r   rS   rZ   rT   rH   r0   )r2   r   r
+   r8   rU   r?   rI   rV   r5   rW   r9   r6   r7   )rQ   r2   rE   r,   rJ   rK   r;   s          r$   Ú update_local_agent_configurationr`   n   sa  é € à×1Ñ1Ó1¼ÔSY×SnÑSnğ  xVñ  :Wğ  4Wğ
+hØ '× >Ñ >¸zÓ T×TˆŞ¤mÄ×@YÑ@YĞdtĞu}Ğt~ğ  Wğ  Xbğ  Wcğ  ceğ  cfñ  'gğ  !gØ+:×+EÑ+EĞÔ(Ø×-Ñ-¨jÓP×PĞPØ&×=Ñ=¸jÓS×SˆŞ¤]¼v×?dÑ?dğ  nPñ  &Qğ   QØĞñ Uñ 	QÙSøô Ól¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓwœ}¼×9^Ñ9^ĞirĞstĞruĞgvÑwĞwûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüsv   ‚(E«C ¿CÁ AC ÂCÂC Â(CÂ)$C ÃEÃC ÃC ÃC Ã
+EÃ!C?Ã?EÄD'Ä'EÄ4!EÅEÅEz)Delete Session-Scoped Agent Configurationc              ƒ   óB  #   •  UR                  X5      I S h  v•N (       d  [        [        R                  SS9e g  N#! [         a&  n[        [        R
+                  [        U5      S9eS nAf[         a&  n[        [        R                  [        U5      S9eS nAff = f7frN   )	Údelete_local_agent_configr   r
+   r5   rW   r?   r9   r7   r8   )rQ   r2   r,   r;   s       r$   Ú delete_local_agent_configurationrc   }   sˆ   é € ğhØ×6Ñ6°zÓL×LÕLÜ¬F×,QÑ,QĞZyÑzĞzğ Mğ ñ	 MøäÓl¬Ä6×C\ÑC\ÔehĞijÓekÑ)lĞ#lûÜÓg¤-¼F×<WÑ<WÔ`cĞdeÓ`fÑ"gĞgûĞgüs=   ‚B„> ˜<™!> ºB¼> ¾
+BÁ!A)Á)BÁ6!BÂBÂBz/runzRun Agent TaskÚrequestÚcurrent_agent_executorc              ƒ   óL  #   •  UR                  U 5      I S h  v•N nUR                  S:X  a³  UR                  =(       d    SnSUR                  5       ;   a,  SUR                  5       ;   a  [	        [        R
+                  US9eSUR                  5       ;   d  SUR                  5       ;   d  SU;   a  [	        [        R                  US9e[	        [        R                  US9eU$  NÉ! [         a    e [         a)  n[	        [        R                  S	[        U5       3S9eS nAff = f7f)
+NÚfailedzAgent task failed.z	not foundÚconfigurationr   zservice unavailablez
+not loadedzDependency Injection ErrorzUnexpected error: )
+Úrun_agent_taskr
+   Úerror_messageÚlowerr   r?   r#   r5   Ú	Exceptionr9   )rd   re   Úrun_status_resultÚerror_detailr;   s        r$   Úrun_agent_task_endpointro   ‡   sN  é € ğ
+
+HØ"8×"GÑ"GÈÓ"P×PĞØ×#Ñ# xÓ/Ø,×:Ñ:×RĞ>RˆLØ˜l×0Ñ0Ó2Ó2°È,×J\ÑJ\ÓJ^Ó7^Ôfsô  AG÷  AZñ  AZğ  coñ  gpğ  apØ&¨,×*<Ñ*<Ó*>Ó>À,ĞR^×RdÑRdÓRfÓBfğ  kGğ  KWó  kWÜ#´×0SÑ0SĞ\hÑiĞiÜ%´&×2WÑ2WĞ`lÑmĞmØ Ğ ñ Qøô Ó˜%Üó  H¤¼6×;`Ñ;`Ğk}ô  Bğ  CDó  Eğ  ~Fğ  jGñ  "Hğ  Hûğ  Hüs9   ‚D$„C$ ˜C"™CC$ Ã!D$Ã"C$ Ã$D!Ã8$DÄD!Ä!D$z/run/streamzRun Agent Task (Streaming SSE))r(   r)   r*   Úcurrent_llm_managerc              ƒ   óŞ  ^ ^#   • UR                  T R                  T R                  5      I S h  v•N nU(       d&  [        [        R
+                  ST R                   S3S9eUR                  (       a¸  UR                  (       d&  [        [        R                  SUR                   S3S9eU(       d  [        [        R                  SS9eUR                  UR                  5      I S h  v•N nU(       a  UR                  (       d&  [        [        R                  SUR                   S3S9eO)UR                  (       a  [        [        R                  S	S9eUU 4S
+ jn[        U" 5       SS9$  GN: N…7f)NzAgent config for 'r>   r   zAgent 'z' has no LLM configured.z:LLM module is enabled but LLMManager failed to initialize.zLLM model 'z' for agent not loaded.z)Agent needs LLM, but LLM module disabled.c                 ó<  >#   •  TR                  T5        S h  v•N n U S   [        R                  " U 5      S.7v •  M*   N%
+ g ! [         aK  n[        R                  SU 3SS9  [        U5      SS.nS[        R                  " U5      S.7v •   S nAg S nAff = f7f)	NÚtype)ÚeventÚdataz)Error during agent SSE event generation: T)Úexc_infoÚagent_stream_error)Úmessagers   Úerror)Ústream_agent_task_outputsÚjsonÚdumpsrl   r    ry   r9   )ÚchunkÚe_streamÚerror_payloadre   rd   s      €€r$   Úevent_generatorÚ;stream_agent_task_outputs_endpoint.<locals>.event_generator¾   s”   øé € ğ	HØ5×OÑOĞPWÔX÷ JeØ % f¡´t·z²zÀ%Ó7HÑIÕIñJÑXøäó 	HÜL‰LĞDÀXÀJĞOĞZ^ˆLÑ_Ü(+¨H«Ğ?SÑTˆMØ#¬T¯ZªZ¸Ó-FÑG×GĞGûğ	HüsO   ƒB…A –AšA ›A"A Á AÁA ÁBÁ
+BÁABÂBÂBÂBztext/event-stream)Ú
+media_type)Úget_effective_agent_configr2   rQ   r   r
+   r?   ÚENABLE_LLM_MODULEÚllm_model_idr8   r#   Úget_model_detailsÚloadedr   )rd   r,   re   r   rp   Úagent_config_instanceÚ
+model_infor€   s   ` `     r$   Ú"stream_agent_task_outputs_endpointrŠ   ˜   ss  ùé € ğ  #*×"DÑ"DÀW×EUÑEUĞW^×WiÑWiÓ"j×jĞö !Ü¬×(AÑ(AĞL^Ğ_f×_oÑ_oĞ^pĞp|ĞJ}Ñ~Ğ~à×)×)Ø$×1×1Ü¬F×,GÑ,GĞRYĞZo×ZxÑZxĞYyğ  zRğ  QSñ  Tğ  TŞ"Ü¬F×,OÑ,Oğ  YUñ  Vğ  Vğ /×@Ñ@ĞAV×AcÑAcÓd×dˆ
+ö  ×!2×!2Ü¬F×,OÑ,OĞZeĞf{÷  gIñ  gIğ  fJğ  Jağ  Ybñ  cğ  cğ "3à	×	+×	+Ü¬×(KÑ(KĞTñ  Ağ  	AöHô ™Ó0Ğ=PÑQĞQò? kñ eùs#   „*E-®E(¯B6E-Ã%E+Ã&BE-Å+E-)AÚloggingr{   ÚsysÚtypingr   r   r   Úfastapir   r   r   r	   r
+   r   Ússe_starlette.sser   Úacp_backend.configr   r   Ú%acp_backend.core.agent_config_handlerr   Úacp_backend.core.agent_executorr   ÚAgentExecutorClassÚacp_backend.core.llm_managerr   Úacp_backend.dependenciesr   r   r   r   Úacp_backend.models.agent_modelsr   r   r   r   Ú	getLoggerÚ__name__r    Úrouterr"   ÚTAG_AGENT_CONFIG_GLOBALÚTAG_AGENT_CONFIG_LOCALÚTAG_AGENT_EXECUTIONr%   ÚpostÚHTTP_201_CREATEDr<   Úgetr9   rA   rD   ÚputrL   ÚdeleteÚHTTP_204_NO_CONTENTrP   ÚSESSION_PREFIXrX   r[   r^   r`   rc   ro   rŠ   © r&   r$   Ú<module>r¥      sb  ğã Û Û 
+ß 1Ñ 1ß I× Iİ 1ç 1İ Dİ Oİ 3÷ó ÷ó ğ 
+×	Ò	˜8Ó	$€Ù	‹€Ø€Ø8Ğ Ø?Ğ Ø'Ğ ñ 8?Ğ?VÓ7Wñ }¨Hõ }ğ
+ ‡Ğ¨{È×H_ÑH_ğ  jMğ  Ulğ  Tmñ  }Dğ  EZó  }[ğ  |\€ğ  ]ÙJNÈsË)Ñszğ  |_ó  t`ñ h¸Kğ hĞ^pô hó ]ğhğ ‡Ğ(¸ĞNnğ  wNğ  vOñ  _fğ  g|ó  _}ğ  ^~€ğ  Ù9=¸c»Ñbiğ  kNó  cOñ °3ğ ĞM_ô ó ğğ ‡Ğ¨d°;Ñ.?ĞIoğ  xOğ  wPñ  `gğ  h}ó  `~ğ  _€ğ  @ÙMTĞUxÓMyñ 5Ğ8Jô 5ó @ğ5ğ ‡Ğ(¸ĞNqğ  zQğ  yRñ  biğ  jó  b@ğ  aA€ğ  BÙ<@À»IÑlpĞqtÓluñ  V]ğ  ^Aó  VBñ h°cğ hĞ^iğ hğ  ASô hó Bğhğ ‡Ğ+¸×9SÑ9Sğ  ^Ağ  I`ğ  Hañ  qxğ  yNó  qOğ  pP€ğ  QÙ<@À»IÑelğ  nQó  fRñ °cğ ĞPbô ó Qğğ 1€Ø‡Ğ˜xĞ(¸ĞRX×RiÑRiğ  t_ğ  g}ğ  f~ñ  NUğ  Vkó  Nlğ  Mm€ğ  nÙ=AÀ#»YÑfjĞknÓfoñ  PWğ  X{ó  P|ñ 
+h°sğ 
+hĞXcğ 
+hğ  {Mô 
+hó nğ
+hğ ‡ˆ~ĞĞ3Ğ4À[ğ  [Cğ  Kağ  Jbñ  ryğ  zOó  rPğ  qQ€ğ  RÙ:>¸s»)ÑUYĞZ]ÓU^ñ  Fğ  Gjó  kñ °Cğ Èsğ Ği{ô ó Rğğ ‡ˆ~Ğ˜hĞ'¸¸[Ñ8Iğ  TBğ  J`ğ  Iañ  qxğ  yNó  qOğ  pP€ğ  QÙ<@À»IÑelğ  nQó  fRñ h°cğ hĞPbô hó Qğhğ
+ ‡ˆ~ĞĞ3Ğ4À[ğ  [Fğ  Ndğ  Meñ  u|ğ  }Ró  uSğ  tT€ğ  UÙ=AÀ#»YÑX\Ğ]`ÓXañ  IMğ  NQó  IRñ  ryğ  z]ó  r^ñ h°sğ hĞRUğ hğ  {Fğ hğ  ]oô hó Uğhğ ‡.Ğ!Ğ!6Ğ7ÀV×E_ÑE_ğ  jUğ  ]sğ  \tñ  DKğ  Laó  Dbğ  Cc€ğ  dÙ=AÀ#»YÑX\Ğ]`ÓXañ  BIğ  Jmó  Bnñ °sğ ĞRUğ Ğl~ô ó dğğ ‡ˆV NĞ<LĞTgĞShÑxğ  AVó  yWğ  xX€ğ  Yá# C›yÙ18Ğ9VÓ1WñHØğHà.ôHó YğHğ  ‡ˆ]Ğ$DĞL_ĞK`Ñpwğ  yNó  qOğ  pP€ğ  Qá# C›yÙ")Ğ*MÓ"NÙ18Ğ9VÓ1WÙ!(Ğ)@Ó!AÙ07Ğ8RÓ0Sñ.RØğ.Ràğ.Rğ /ğ.Rğ ğ	.Rğ
+ " *Ñ-ô.Ró Qñ.Rr&   # This file makes 'acp_backend' a Python package.
+# It can be empty.
+# acp_backend/routers/agents.py
+import logging
+import json 
+import sys 
+from typing import List, AsyncGenerator, Optional 
+from fastapi import APIRouter, HTTPException, Body, Path, status, Depends
+from sse_starlette.sse import EventSourceResponse
+
+from acp_backend.config import settings, Settings
+from acp_backend.core.agent_config_handler import AgentConfigHandler 
+from acp_backend.core.agent_executor import AgentExecutor as AgentExecutorClass
+from acp_backend.core.llm_manager import LLMManager
+
+from acp_backend.dependencies import (
+    get_agent_config_handler_dependency, 
+    get_agent_executor_dependency, 
+    get_llm_manager_dependency, 
+    get_settings_dependency
+)
+
+from acp_backend.models.agent_models import (
+    AgentConfig, RunAgentRequest, AgentRunStatus, AgentOutputChunk
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+MODULE_NAME = "Agents Service"
+TAG_AGENT_CONFIG_GLOBAL = "Agent Configuration (Global)"
+TAG_AGENT_CONFIG_LOCAL = "Agent Configuration (Session-Scoped)"
+TAG_AGENT_EXECUTION = "Agent Execution"
+
+
+def _check_module_enabled(current_settings: Settings = Depends(get_settings_dependency)):
+    if not current_settings.ENABLE_AGENT_MODULE:
+        logger.warning(f"{MODULE_NAME} is disabled in configuration.")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"{MODULE_NAME} is currently disabled.")
+
+@router.post("/configs/global", response_model=AgentConfig, status_code=status.HTTP_201_CREATED, summary="Create Global Agent Configuration", tags=[TAG_AGENT_CONFIG_GLOBAL], dependencies=[Depends(_check_module_enabled)])
+async def create_global_agent_configuration(config_payload: AgentConfig = Body(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try:
+        if await handler.get_global_agent_config(config_payload.agent_id): raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Global agent ID '{config_payload.agent_id}' already exists.")
+        await handler.save_global_agent_config(config_payload)
+        persisted_config = await handler.get_global_agent_config(config_payload.agent_id)
+        if not persisted_config: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve after saving.")
+        return persisted_config
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/configs/global/{agent_id}", response_model=AgentConfig, summary="Get Global Agent Configuration", tags=[TAG_AGENT_CONFIG_GLOBAL], dependencies=[Depends(_check_module_enabled)])
+async def get_global_agent_configuration(agent_id: str = Path(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try: config = await handler.get_global_agent_config(agent_id)
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not config: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Global agent ID '{agent_id}' not found.")
+    return config
+
+@router.get("/configs/global", response_model=List[AgentConfig], summary="List All Global Agent Configurations", tags=[TAG_AGENT_CONFIG_GLOBAL], dependencies=[Depends(_check_module_enabled)])
+async def list_all_global_agent_configurations(handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    return await handler.list_global_agent_configs()
+
+@router.put("/configs/global/{agent_id}", response_model=AgentConfig, summary="Update Global Agent Configuration", tags=[TAG_AGENT_CONFIG_GLOBAL], dependencies=[Depends(_check_module_enabled)])
+async def update_global_agent_configuration(agent_id: str = Path(...), config_update_payload: AgentConfig = Body(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    if agent_id != config_update_payload.agent_id: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path ID vs body ID mismatch.")
+    try:
+        existing_config = await handler.get_global_agent_config(agent_id)
+        if not existing_config: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Global agent ID '{agent_id}' not found.")
+        config_update_payload.created_at = existing_config.created_at 
+        await handler.save_global_agent_config(config_update_payload)
+        updated_config = await handler.get_global_agent_config(agent_id)
+        if not updated_config: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve after update.")
+        return updated_config
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.delete("/configs/global/{agent_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Global Agent Configuration", tags=[TAG_AGENT_CONFIG_GLOBAL], dependencies=[Depends(_check_module_enabled)])
+async def delete_global_agent_configuration(agent_id: str = Path(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try:
+        if not await handler.delete_global_agent_config(agent_id):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Deletion failed unexpectedly.")
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return 
+
+SESSION_PREFIX = "/sessions/{session_id}/agents"
+@router.post(f"{SESSION_PREFIX}/configs", response_model=AgentConfig, status_code=status.HTTP_201_CREATED, summary="Create Session-Scoped Agent Configuration", tags=[TAG_AGENT_CONFIG_LOCAL], dependencies=[Depends(_check_module_enabled)])
+async def create_local_agent_configuration(session_id: str = Path(...), config_payload: AgentConfig = Body(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try:
+        if await handler.get_local_agent_config(session_id, config_payload.agent_id):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Local agent ID '{config_payload.agent_id}' already exists in session '{session_id}'.")
+        await handler.save_local_agent_config(session_id, config_payload)
+        persisted_config = await handler.get_local_agent_config(session_id, config_payload.agent_id)
+        if not persisted_config: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve after saving.")
+        return persisted_config
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get(f"{SESSION_PREFIX}/configs/{{agent_id}}", response_model=AgentConfig, summary="Get Session-Scoped Agent Configuration", tags=[TAG_AGENT_CONFIG_LOCAL], dependencies=[Depends(_check_module_enabled)])
+async def get_local_agent_configuration(session_id: str = Path(...), agent_id: str = Path(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try: config = await handler.get_local_agent_config(session_id, agent_id)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not config: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Local agent ID '{agent_id}' not found in session '{session_id}'.")
+    return config
+
+@router.get(f"{SESSION_PREFIX}/configs", response_model=List[AgentConfig], summary="List All Session-Scoped Agent Configurations", tags=[TAG_AGENT_CONFIG_LOCAL], dependencies=[Depends(_check_module_enabled)])
+async def list_local_agent_configurations(session_id: str = Path(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try: return await handler.list_local_agent_configs(session_id)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.put(f"{SESSION_PREFIX}/configs/{{agent_id}}", response_model=AgentConfig, summary="Update Session-Scoped Agent Configuration", tags=[TAG_AGENT_CONFIG_LOCAL], dependencies=[Depends(_check_module_enabled)])
+async def update_local_agent_configuration(session_id: str = Path(...), agent_id: str = Path(...), config_update_payload: AgentConfig = Body(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)):  
+    if agent_id != config_update_payload.agent_id: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path ID vs body ID mismatch.")
+    try:
+        existing_config = await handler.get_local_agent_config(session_id, agent_id)
+        if not existing_config: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Local agent ID '{agent_id}' not found in session '{session_id}'.")
+        config_update_payload.created_at = existing_config.created_at
+        await handler.save_local_agent_config(session_id, config_update_payload)
+        updated_config = await handler.get_local_agent_config(session_id, agent_id)
+        if not updated_config: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve after update.")
+        return updated_config
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.delete(f"{SESSION_PREFIX}/configs/{{agent_id}}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Session-Scoped Agent Configuration", tags=[TAG_AGENT_CONFIG_LOCAL], dependencies=[Depends(_check_module_enabled)])
+async def delete_local_agent_configuration(session_id: str = Path(...), agent_id: str = Path(...), handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency)): 
+    try:
+        if not await handler.delete_local_agent_config(session_id, agent_id):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Deletion failed unexpectedly.")
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return 
+
+# Agent Execution
+@router.post("/run", response_model=AgentRunStatus, summary="Run Agent Task", tags=[TAG_AGENT_EXECUTION], dependencies=[Depends(_check_module_enabled)])
+async def run_agent_task_endpoint(
+    request: RunAgentRequest = Body(...),
+    current_agent_executor: AgentExecutorClass = Depends(get_agent_executor_dependency) 
+):
+    try:
+        run_status_result = await current_agent_executor.run_agent_task(request) 
+        if run_status_result.status == "failed":
+            error_detail = run_status_result.error_message or "Agent task failed."
+            if "not found" in error_detail.lower() and "configuration" in error_detail.lower(): raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_detail)
+            elif "service unavailable" in error_detail.lower() or "not loaded" in error_detail.lower() or "Dependency Injection Error" in error_detail: 
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error_detail)
+            else: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail)
+        return run_status_result
+    except HTTPException: raise
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {str(e)}")
+
+@router.post("/run/stream", summary="Run Agent Task (Streaming SSE)", tags=[TAG_AGENT_EXECUTION], dependencies=[Depends(_check_module_enabled)])
+async def stream_agent_task_outputs_endpoint(
+    request: RunAgentRequest = Body(...),
+    handler: AgentConfigHandler = Depends(get_agent_config_handler_dependency), 
+    current_agent_executor: AgentExecutorClass = Depends(get_agent_executor_dependency),
+    current_settings: Settings = Depends(get_settings_dependency), 
+    current_llm_manager: Optional[LLMManager] = Depends(get_llm_manager_dependency) 
+):
+    # DEBUG PRINTS REMOVED
+    # print(f"DEBUG_AGENT_ROUTER_STREAM: Endpoint called for agent_id: {request.agent_id}, session_id: {request.session_id}", file=sys.stderr)
+    # print(f"DEBUG_AGENT_ROUTER_STREAM: Injected AgentConfigHandler ID: {id(handler)}, type: {type(handler)}", file=sys.stderr)
+    # if hasattr(handler, 'settings'):
+    #     print(f"DEBUG_AGENT_ROUTER_STREAM: Injected AgentConfigHandler settings ID: {id(handler.settings)}, WORK_SESSIONS_DIR: {handler.settings.WORK_SESSIONS_DIR}", file=sys.stderr)
+    # else:
+    #     print(f"DEBUG_AGENT_ROUTER_STREAM: Injected AgentConfigHandler does not have 'settings' attribute", file=sys.stderr)
+    
+    agent_config_instance = await handler.get_effective_agent_config(request.agent_id, request.session_id)
+    
+    # print(f"DEBUG_AGENT_ROUTER_STREAM: Result of get_effective_agent_config for '{request.agent_id}': {agent_config_instance.name if agent_config_instance else 'Not Found'}", file=sys.stderr)
+
+    if not agent_config_instance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent config for '{request.agent_id}' not found.")
+    
+    if current_settings.ENABLE_LLM_MODULE:
+        if not agent_config_instance.llm_model_id: 
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Agent '{agent_config_instance.agent_id}' has no LLM configured.")
+        if not current_llm_manager:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="LLM module is enabled but LLMManager failed to initialize.")
+        
+        # print(f"DEBUG_AGENT_ROUTER_STREAM: Checking LLM '{agent_config_instance.llm_model_id}' with LLM Manager ID: {id(current_llm_manager)}", file=sys.stderr)
+        model_info = await current_llm_manager.get_model_details(agent_config_instance.llm_model_id)
+        # print(f"DEBUG_AGENT_ROUTER_STREAM: LLM model info: {model_info}", file=sys.stderr)
+
+        if not model_info or not model_info.loaded: 
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"LLM model '{agent_config_instance.llm_model_id}' for agent not loaded.")
+    elif agent_config_instance.llm_model_id: 
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Agent needs LLM, but LLM module disabled.")
+
+    async def event_generator():
+        try:
+            async for chunk in current_agent_executor.stream_agent_task_outputs(request): 
+                yield {"event": chunk["type"], "data": json.dumps(chunk)}
+        except Exception as e_stream:
+            logger.error(f"Error during agent SSE event generation: {e_stream}", exc_info=True)
+            error_payload = {"message": str(e_stream), "type": "agent_stream_error"}
+            yield {"event": "error", "data": json.dumps(error_payload)}
+            
+    return EventSourceResponse(event_generator(), media_type="text/event-stream")
+# acp_backend/routers/work_sessions.py
+import logging
+from typing import List 
+from fastapi import APIRouter, HTTPException, Body, Path, status, Depends
+
+from acp_backend.config import settings
+# Import the class and the global instance from core
+from acp_backend.core.session_handler import SessionHandler 
+from acp_backend.core import session_handler as global_session_handler_instance
+
+from acp_backend.models.work_session_models import (
+    WorkSession, CreateWorkSessionRequest, UpdateWorkSessionRequest
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+MODULE_NAME = "Work Sessions Service"
+TAG_SESSIONS = "Work Session Management"
+
+# Dependency provider function for SessionHandler
+def get_session_handler_dependency() -> SessionHandler:
+    if not global_session_handler_instance:
+        logger.critical("SessionHandler (global instance) is not available.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Work session service is not properly initialized."
+        )
+    return global_session_handler_instance
+
+def _check_module_enabled():
+    if not settings.ENABLE_WORK_SESSION_MODULE:
+        logger.warning(f"{MODULE_NAME} is disabled in configuration.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+            detail=f"{MODULE_NAME} is currently disabled."
+        )
+
+@router.post(
+    "/", 
+    response_model=WorkSession, 
+    status_code=status.HTTP_201_CREATED, 
+    summary="Create a New Work Session",
+    tags=[TAG_SESSIONS]
+)
+async def create_new_work_session(
+    request: CreateWorkSessionRequest = Body(...),
+    handler: SessionHandler = Depends(get_session_handler_dependency) # Use dependency
+):
+    _check_module_enabled()
+    logger.info(f"Request to create new work session with name: '{request.name}'")
+    try:
+        new_session = await handler.create_session(request)
+        logger.info(f"Work session '{new_session.name}' (ID: {new_session.session_id}) created successfully.")
+        return new_session
+    except RuntimeError as e: 
+        logger.error(f"Runtime error creating work session '{request.name}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception as e: 
+        logger.error(f"Unexpected error creating work session '{request.name}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(
+    "/", 
+    response_model=List[WorkSession], 
+    summary="List All Work Sessions",
+    tags=[TAG_SESSIONS]
+)
+async def list_all_work_sessions(
+    handler: SessionHandler = Depends(get_session_handler_dependency) # Use dependency
+):
+    _check_module_enabled()
+    logger.debug("Request to list all work sessions.")
+    try:
+        sessions = await handler.list_sessions()
+        logger.debug(f"Returning {len(sessions)} work sessions.")
+        return sessions
+    except IOError as e: 
+        logger.error(f"I/O error listing work sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list sessions due to I/O error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error listing work sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list work sessions: {str(e)}")
+
+@router.get(
+    "/{session_id}", 
+    response_model=WorkSession, 
+    summary="Get Details of a Specific Work Session",
+    tags=[TAG_SESSIONS]
+)
+async def get_work_session_details(
+    session_id: str = Path(..., description="The unique ID of the work session."),
+    handler: SessionHandler = Depends(get_session_handler_dependency) # Use dependency
+):
+    _check_module_enabled()
+    logger.debug(f"Request for work session details: {session_id}")
+    try:
+        session = await handler.get_session(session_id)
+    except ValueError as ve: 
+        logger.warning(f"Get session failed: Invalid session ID format '{session_id}': {ve}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid session ID format: {session_id}")
+    
+    if not session:
+        logger.warning(f"Work session ID '{session_id}' not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Work Session ID '{session_id}' not found.")
+    return session
+
+@router.put(
+    "/{session_id}", 
+    response_model=WorkSession, 
+    summary="Update an Existing Work Session",
+    tags=[TAG_SESSIONS]
+)
+async def update_work_session_details(
+    session_id: str = Path(..., description="The ID of the work session to update."),
+    update_data: UpdateWorkSessionRequest = Body(...),
+    handler: SessionHandler = Depends(get_session_handler_dependency) # Use dependency
+):
+    _check_module_enabled()
+    logger.info(f"Request to update work session: {session_id} with data: {update_data.model_dump(exclude_unset=True)}")
+    try:
+        updated_session = await handler.update_session(session_id, update_data)
+    except ValueError as ve: 
+        logger.warning(f"Update session failed: Invalid session ID format '{session_id}': {ve}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid session ID format: {session_id}")
+
+    if not updated_session:
+        logger.warning(f"Failed to update work session '{session_id}'. It might not exist or an error occurred.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Work Session ID '{session_id}' not found or could not be updated.")
+    logger.info(f"Work session '{session_id}' updated successfully.")
+    return updated_session
+
+@router.delete(
+    "/{session_id}", 
+    response_model=None, 
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a Work Session",
+    tags=[TAG_SESSIONS]
+)
+async def delete_work_session_by_id(
+    session_id: str = Path(..., description="The ID of the work session to delete."),
+    handler: SessionHandler = Depends(get_session_handler_dependency) # Use dependency
+):
+    _check_module_enabled()
+    logger.info(f"Request to delete work session: {session_id}")
+    try:
+        deleted_successfully = await handler.delete_session(session_id)
+        if not deleted_successfully: 
+            logger.error(f"Failed to delete work session '{session_id}' due to an internal storage error.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not delete session '{session_id}'.")
+        logger.info(f"Work session '{session_id}' processed for deletion.")
+        return 
+    except ValueError as ve: 
+        logger.warning(f"Delete session failed: Invalid session ID format '{session_id}': {ve}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid session ID format: {session_id}")
+    except IOError as ioe: 
+        logger.error(f"Delete session failed for '{session_id}': {ioe}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ioe))
+    except Exception as e: 
+        logger.error(f"Unexpected error deleting session '{session_id}': {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+# acp_backend/routers/work_board.py
+import logging
+from typing import List 
+from fastapi import APIRouter, HTTPException, Body, Path, Query, status, Depends
+
+from acp_backend.config import settings
+# Import INSTANCES from core for dependency providers
+from acp_backend.core import fs_manager as global_fs_manager_instance
+from acp_backend.core import session_handler as global_session_handler_instance
+# Import CLASSES for type hinting
+from acp_backend.core.fs_manager import FileSystemManager
+from acp_backend.core.session_handler import SessionHandler
+
+from acp_backend.models.work_board_models import (
+    FileNode, ReadFileResponse, WriteFileRequest,
+    CreateDirectoryRequest, MoveItemRequest
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+MODULE_NAME = "WorkBoard Service"
+TAG_WORKBOARD = "WorkBoard File System"
+
+# Dependency provider functions
+def get_fs_manager_dependency() -> FileSystemManager:
+    if not global_fs_manager_instance: raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "File system service not initialized.")
+    return global_fs_manager_instance
+
+def get_session_handler_dependency() -> SessionHandler: # Already defined in work_sessions.py, ensure consistency or share
+    if not global_session_handler_instance: raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Session service not initialized.")
+    return global_session_handler_instance
+
+
+async def _check_module_and_session(
+    session_id: str, 
+    current_session_handler: SessionHandler = Depends(get_session_handler_dependency) # Use injected handler
+):
+    if not settings.ENABLE_WORK_BOARD_MODULE:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"{MODULE_NAME} is currently disabled.")
+    try:
+        session = await current_session_handler.get_session(session_id) 
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid session ID format: {session_id}")
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session ID '{session_id}' not found.")
+
+@router.get("/{session_id}/files", response_model=List[FileNode], summary="List Files and Directories", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def list_files_in_work_board(
+    session_id: str = Path(..., description="Session ID."),
+    path: str = Query(".", description="Relative directory path."),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: return await current_fs_manager.list_dir(session_id, path)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except NotADirectoryError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
+
+@router.get("/{session_id}/files/content", response_model=ReadFileResponse, summary="Read File Content", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def read_file_content_from_work_board(
+    session_id: str = Path(..., description="Session ID."),
+    path: str = Query(..., description="Relative path of the file to read."),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: return await current_fs_manager.read_file(session_id, path)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except IsADirectoryError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) # For decode errors
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
+
+@router.post("/{session_id}/files/content", response_model=FileNode, status_code=status.HTTP_201_CREATED, summary="Write File Content", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def write_file_content_to_work_board(
+    session_id: str = Path(..., description="Session ID."),
+    request: WriteFileRequest = Body(...),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: return await current_fs_manager.write_file(session_id, request)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) # Path resolution
+    except NotADirectoryError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
+
+@router.delete("/{session_id}/files", status_code=status.HTTP_204_NO_CONTENT, summary="Delete File or Directory", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def delete_work_board_item(
+    session_id: str = Path(..., description="Session ID."),
+    path: str = Query(..., description="Relative path to delete."),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: 
+        if not await current_fs_manager.delete_item(session_id, path):
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Deletion failed unexpectedly.")
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) # Path resolution
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
+    return
+
+@router.post("/{session_id}/directories", response_model=FileNode, status_code=status.HTTP_201_CREATED, summary="Create Directory", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def create_work_board_directory(
+    session_id: str = Path(..., description="Session ID."),
+    request: CreateDirectoryRequest = Body(...),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: return await current_fs_manager.create_directory(session_id, request.path)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FileExistsError as e: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
+
+@router.post("/{session_id}/move", response_model=FileNode, summary="Move/Rename File or Directory", tags=[TAG_WORKBOARD], dependencies=[Depends(_check_module_and_session)])
+async def move_work_board_item(
+    session_id: str = Path(..., description="Session ID."),
+    request: MoveItemRequest = Body(...),
+    current_fs_manager: FileSystemManager = Depends(get_fs_manager_dependency)
+):
+    try: return await current_fs_manager.move_item(session_id, request.source_path, request.destination_path)
+    except FileNotFoundError as e: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) # Source not found
+    except FileExistsError as e: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) # Dest exists
+    except NotADirectoryError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except IOError as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IOError: {e}")
+    except Exception as e: raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")

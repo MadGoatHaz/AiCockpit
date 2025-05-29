@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from acp_backend.models.work_session_models import CreateWorkSessionRequest
+from acp_backend.models.work_session_models import SessionCreate
 
 def test_create_work_session_request_valid():
     """Test successful creation with valid data."""
@@ -10,7 +10,7 @@ def test_create_work_session_request_valid():
         "name": "Valid Session Name",
         "description": "A valid description for the session."
     }
-    req = CreateWorkSessionRequest(**data)
+    req = SessionCreate(**data)
     assert req.name == data["name"]
     assert req.description == data["description"]
     print(f"\n[PASSED] test_create_work_session_request_valid: {req.model_dump_json(indent=2)}")
@@ -18,7 +18,7 @@ def test_create_work_session_request_valid():
 def test_create_work_session_request_valid_no_description():
     """Test successful creation with valid name and no description."""
     data = {"name": "Session Without Description"}
-    req = CreateWorkSessionRequest(**data)
+    req = SessionCreate(**data)
     assert req.name == data["name"]
     assert req.description is None # Default for Optional description is None
     print(f"\n[PASSED] test_create_work_session_request_valid_no_description: {req.model_dump_json(indent=2)}")
@@ -27,7 +27,7 @@ def test_create_work_session_request_missing_name():
     """Test ValidationError when 'name' field is missing."""
     data = {"description": "This session is missing a name."}
     with pytest.raises(ValidationError) as excinfo:
-        CreateWorkSessionRequest(**data)
+        SessionCreate(**data)
     
     assert len(excinfo.value.errors()) == 1
     assert excinfo.value.errors()[0]['type'] == 'missing'
@@ -49,7 +49,7 @@ def test_create_work_session_request_invalid_name_length(invalid_name, expected_
         "description": "Testing name length."
     }
     with pytest.raises(ValidationError) as excinfo:
-        CreateWorkSessionRequest(**data)
+        SessionCreate(**data)
     
     assert len(excinfo.value.errors()) == 1
     # Pydantic v2 error types are like 'string_too_short', 'string_too_long'
@@ -64,7 +64,7 @@ def test_create_work_session_request_invalid_description_length():
         "description": "D" * 501  # Description too long
     }
     with pytest.raises(ValidationError) as excinfo:
-        CreateWorkSessionRequest(**data)
+        SessionCreate(**data)
     
     assert len(excinfo.value.errors()) == 1
     assert "too_long" in excinfo.value.errors()[0]['type'] # 'string_too_long'
@@ -79,7 +79,7 @@ def test_create_work_session_request_extra_fields_forbidden():
         "unexpected_field": "some_value"
     }
     with pytest.raises(ValidationError) as excinfo:
-        CreateWorkSessionRequest(**data)
+        SessionCreate(**data)
     
     assert len(excinfo.value.errors()) == 1
     assert excinfo.value.errors()[0]['type'] == 'extra_forbidden'
