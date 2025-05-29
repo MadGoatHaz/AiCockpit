@@ -17,7 +17,11 @@
 
 **AiCockpit (ACP)** is an ambitious open-source project to create a locally hosted backend API and, ultimately, a full-fledged web application. Imagine a powerful, private workspace, running on your own hardware, where you can seamlessly manage Large Language Models (LLMs), orchestrate AI agents, and organize your projects with AI assistance.
 
-Our goal is to build something like Google's Gemini or OpenAI's ChatGPT, but **self-hosted, highly customizable, and focused on empowering developers and creators on their local machines** (initially targeting Linux/Ubuntu).
+Our vision extends far beyond creating a simple alternative to cloud-based AI tools. We aim to build **THE definitive, self-hosted, DIY Ai workspace for everyone.** AiCockpit is designed to be easily installable, accessible on your local network (or via your own VPN for secure remote access), ensuring your data remains entirely within your control, on your hardware. 
+
+While prioritizing local AI and data sovereignty, AiCockpit will also embrace a **hybrid approach**, enabling you to seamlessly integrate and manage cloud-based AI services alongside your local models. This allows for a powerful collaborative environment where different AI capabilities (local and remote) can contribute to various aspects of your projects.
+
+The ultimate aspiration for AiCockpit is to evolve into a **comprehensive, collaborative Ai work environment that verges on being an operating system in itself.** We envision a future where you can interact with AiCockpit not just through typing, but through **voice commands** and other intuitive modalities, unlocking new levels of productivity and creative partnership with AI. It's about building a foundational platform for human-AI collaboration on *any* conceivable project.
 
 **Current Version:** 0.2.0-alpha (Backend Stable, Frontend Development Starting)
 **Last Updated:** May 28, 2024
