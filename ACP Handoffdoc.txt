@@ -1,3 +1,47 @@
+## Session Update: 2024-06-03 (Current Session)
+
+**Context:** This session focused on verifying frontend-backend interactions after previous fixes, addressing UI layout issues, and attempting to implement user-resizable panels.
+
+**Work Completed:**
+
+1.  **Backend Stability & Dependency Fix (`ptyprocess`):
+    *   Identified `ModuleNotFoundError: No module named 'ptyprocess'` as the cause for backend startup failure and subsequent frontend errors (FileBrowser, Terminal, AI Chat internal server errors).
+    *   Added `ptyprocess` to backend dependencies using `pdm add ptyprocess`.
+    *   Successfully restarted backend and frontend servers.
+
+2.  **Frontend `session_id` Format Fix (`crypto.randomUUID`):
+    *   Diagnosed "Invalid session_id format" errors. Backend expects UUIDs, while frontend was using "ws-1", "ws-2", etc.
+    *   Modified `acp_frontend/src/app/(app)/interact/page.tsx` to use `crypto.randomUUID()` for generating workspace IDs, resolving the format mismatch.
+    *   Addressed a React hydration error caused by `crypto.randomUUID()` mismatch between server and client by initializing workspace state in a `useEffect` hook (client-side only).
+
+3.  **Core Functionality Verification:**
+    *   After the above fixes, successfully verified that core functionalities on the `/interact` page (File Browser, Editor, AI Chat, Terminal) were operational without major errors.
+
+4.  **Layout Adjustment (`/interact` page):
+    *   Addressed the "windows are too long" layout issue by changing the CSS grid proportions in `interact/page.tsx` from `grid-rows-[5fr_1fr]` to `grid-rows-[3fr_1fr]`. This provided a much better visual balance for the panels.
+
+5.  **Attempted User-Resizable Panels (`react-resizable-panels`):
+    *   To allow user adjustment of panel sizes, `react-resizable-panels` (already a dependency) was integrated into `interact/page.tsx` to replace the main vertical CSS grid division.
+    *   Initial implementation led to all panel content disappearing and the re-emergence of previously fixed Terminal WebSocket and dimension errors.
+    *   Several debugging attempts were made, including simplifying the panel structure and adjusting styling, but the issues persisted when `ResizablePanelGroup` was active.
+    *   The decision was made to revert `interact/page.tsx` to the stable CSS grid layout (`grid-rows-[3fr_1fr]`) and defer further investigation into `react-resizable-panels` to avoid instability.
+
+6.  **Documentation Updates:**
+    *   `README.md`: Updated the "Next Steps / To-Do" section to reflect the layout adjustment and deferral of resizable panels.
+    *   `ACP Handoffdoc.txt`: This entry is being created.
+
+**Current State:**
+*   Backend and frontend servers are stable.
+*   Core functionalities on the `/interact` page are working as expected.
+*   The layout of the `/interact` page is significantly improved with the `3fr_1fr` CSS grid row proportions.
+*   User-resizable panels are not implemented; this feature is deferred.
+
+**Next Steps (as per updated `README.md`):
+1.  Commit and push current stable changes to GitHub.
+2.  Proceed with enhancing `smolagents` integration or other features from the roadmap.
+
+**End of Session Update.**
+
 ## Session Update: 2024-06-02
 
 **Context:** This session focused on resolving backend startup issues and addressing several frontend errors, followed by documentation updates.
