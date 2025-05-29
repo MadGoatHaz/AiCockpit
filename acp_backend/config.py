@@ -83,6 +83,8 @@ class AppSettings(BaseSettings):
     ENABLE_AGENTS_MODULE: bool = True
     ENABLE_WORK_SESSIONS_MODULE: bool = True
     ENABLE_WORK_BOARD_MODULE: bool = True
+    ENABLE_WORKSPACE_FILES_MODULE: bool = True
+    ENABLE_TERMINAL_SERVICE_MODULE: bool = True
 
     # LLM Settings (example, align with your actual needs)
     LLM_BACKEND_TYPE: Literal["llama_cpp", "pie", "mock"] = "llama_cpp"
@@ -94,6 +96,13 @@ class AppSettings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    # Model configuration
+    DEFAULT_MODEL_ID: str = "gemma2-latest"
+    DEFAULT_TEMPERATURE: float = 0.7
+
+    # Terminal configuration
+    DEFAULT_SHELL_COMMAND: str = "/bin/bash" # Default shell for PTY
 
     # This validator ensures base directories are created when settings are loaded.
     @field_validator("ACP_BASE_DIR", mode="after")

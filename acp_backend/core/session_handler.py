@@ -22,6 +22,7 @@ from acp_backend.models.work_session_models import (
     SessionMetadata,
     SessionUpdate,
 )
+from acp_backend.models.ai_config_models import AIModelSessionConfig # Added import
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ SESSION_MANIFEST_FILENAME = "session_manifest.json"
 SESSION_AGENTS_DIRNAME = "_agents"
 # Name of the primary data directory within each session
 SESSION_DATA_DIRNAME = "data"
+# Name of the AI model configuration file within each session directory
+SESSION_AI_CONFIG_FILENAME = "ai_config.json" # Added
 
 
 class SessionHandler:
@@ -74,6 +77,10 @@ class SessionHandler:
     def _get_session_data_path(self, session_id: uuid.UUID) -> Path:
         """Returns the path to a session's primary data directory."""
         return self._get_session_path(session_id) / SESSION_DATA_DIRNAME
+
+    def _get_session_ai_config_path(self, session_id: uuid.UUID) -> Path: # Added method
+        """Returns the path to a session's AI model configuration file."""
+        return self._get_session_path(session_id) / SESSION_AI_CONFIG_FILENAME
 
     async def _read_manifest(self, session_id: uuid.UUID) -> Optional[SessionMetadata]:
         """Reads and validates a session's manifest file."""
@@ -248,6 +255,84 @@ class SessionHandler:
         except Exception as e:
             logger.error(f"Error deleting session directory {session_path}: {e}", exc_info=True)
             return False
+
+    # --- Methods for managing session-specific AI model configurations ---
+
+    async def get_ai_model_session_config(self, session_id: uuid.UUID) -> Optional[AIModelSessionConfig]: # Added method
+        """Reads a session's AI model configuration file."""
+        config_path = self._get_session_ai_config_path(session_id)
+        if not await asyncio.to_thread(config_path.is_file):
+            logger.debug(f"AI model config not found for session {session_id} at {config_path}, returning None.")
+            return None # No config file means no specific config set
+        try:
+            def _sync_read_ai_config():
+                with open(config_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            data = await asyncio.to_thread(_sync_read_ai_config)
+            return AIModelSessionConfig(**data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.error(f"Error reading or validating AI model config {config_path} for session {session_id}: {e}")
+            return None # Corrupted or invalid file
+        except Exception as e:
+            logger.error(f"Unexpected error reading AI model config {config_path} for session {session_id}: {e}", exc_info=True)
+            return None
+
+    async def update_ai_model_session_config( # Added method
+        self, session_id: uuid.UUID, config_update_data: AIModelSessionConfig
+    ) -> Optional[AIModelSessionConfig]:
+        """
+        Updates or creates a session's AI model configuration.
+        The 'updated_at' timestamp on the session manifest is also touched.
+        """
+        # First, ensure the session itself exists by trying to read its manifest
+        session_metadata = await self.get_session_metadata(session_id)
+        if not session_metadata:
+            logger.warning(f"Cannot update AI model config for non-existent session {session_id}.")
+            return None
+
+        session_path = self._get_session_path(session_id)
+        await asyncio.to_thread(session_path.mkdir, parents=True, exist_ok=True) # Ensure session directory exists
+        config_path = self._get_session_ai_config_path(session_id)
+
+        # Read existing config to merge if necessary, or create new
+        # For simplicity, this will overwrite with new data if fields are None in request.
+        # A more nuanced merge could be done if AIModelSessionConfig had many fields and partial updates were common.
+        # current_config = await self.get_ai_model_session_config(session_id)
+        # if current_config:
+        #     updated_data = current_config.model_copy(update=config_update_data.model_dump(exclude_none=True))
+        # else:
+        #     updated_data = config_update_data
+
+        # We'll just use the provided config_update_data directly.
+        # Ensure all fields are present even if None, as Pydantic model_dump by default excludes None.
+        # config_to_write = config_update_data.model_dump(exclude_none=False) 
+        # Actually, let's ensure that if a field is not provided in the update, it's not clearing existing one
+        
+        existing_config_dict = {}
+        existing_config = await self.get_ai_model_session_config(session_id)
+        if existing_config:
+            existing_config_dict = existing_config.model_dump()
+
+        update_dict = config_update_data.model_dump(exclude_unset=True) # Only get provided fields
+        final_config_dict = {**existing_config_dict, **update_dict}
+        final_config = AIModelSessionConfig(**final_config_dict)
+
+
+        try:
+            def _sync_write_ai_config():
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(final_config.model_dump(mode="json"), f, indent=4)
+            await asyncio.to_thread(_sync_write_ai_config)
+            logger.info(f"Updated AI model config for session {session_id} at {config_path}")
+
+            # Touch the main session manifest's updated_at timestamp
+            session_metadata.updated_at = datetime.now(timezone.utc)
+            await self._write_manifest(session_id, session_metadata)
+            
+            return final_config
+        except Exception as e:
+            logger.error(f"Error writing AI model config {config_path} for session {session_id}: {e}", exc_info=True)
+            return None
 
     # --- Methods for managing session-specific agent configurations ---
     async def get_local_agent_configs_path(self, session_id: uuid.UUID) -> Path:

@@ -6,12 +6,32 @@
     <!-- Placeholder for badges -->
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
     <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-    <img src="https://img.shields.io/badge/Next.js-15.2.3-green.svg" alt="Next.js 15.2.3">
-    <img src="https://img.shields.io/badge/React-18.3.1-blue.svg" alt="React 18.3.1">
+    <img src="https://img.shields.io/badge/Next.js-15.3.2-green.svg" alt="Next.js 15.3.2">
+    <img src="https://img.shields.io/badge/React-19.0.0-blue.svg" alt="React 19.0.0">
     <img src="https://img.shields.io/badge/status-alpha-orange.svg" alt="Status: Alpha">
     <!-- Add more badges as needed: build status, coverage, etc. -->
   </p>
 </div>
+
+---
+
+## 📖 Table of Contents
+
+*   [👋 Welcome to AiCockpit!](#-welcome-to-aicockpit)
+*   [🌟 Core Vision](#-core-vision)
+*   [✨ Key Features](#-key-features)
+    *   [Backend (Solid & Ready!)](#backend-solid--ready)
+    *   [Frontend (In Progress & Rapidly Evolving!)](#frontend-in-progress--rapidly-evolving)
+*   [🛣️ Roadmap & Current Focus](#️-roadmap--current-focus)
+*   [🛠️ Tech Stack Snapshot](#️-tech-stack-snapshot)
+*   [🧑‍💻 Getting Started (Developers)](#-getting-started-developers)
+    *   [Backend Setup](#1-backend-setup)
+    *   [Frontend Setup](#2-frontend-setup)
+    *   [Linting & Formatting](#3-linting--formatting)
+    *   [Running Tests](#4-running-tests)
+*   [✨ Best Practices & Development Notes](#-best-practices--development-notes)
+*   [🤝 Contributing](#-contributing)
+*   [📜 License](#-license)
 
 ---
 
@@ -26,7 +46,7 @@ While prioritizing local AI and data sovereignty, AiCockpit will also embrace a 
 The ultimate aspiration for AiCockpit is to evolve into a **comprehensive, collaborative Ai work environment that verges on being an operating system in itself.** We envision a future where you can interact with AiCockpit not just through typing, but through **voice commands** and other intuitive modalities, unlocking new levels of productivity and creative partnership with AI. It's about building a foundational platform for human-AI collaboration on *any* conceivable project.
 
 **Current Version:** 0.2.5-alpha (Backend Stable, Frontend In Progress)
-**Last Updated:** March 5, 2025
+**Last Updated:** May 29, 2024 (Reflecting recent frontend development sprint)
 
 ---
 
@@ -38,7 +58,7 @@ AiCockpit is not just another AI tool; it's envisioned as **the ultimate self-ho
 
 *   🧠 **Master Your LLMs:** Effortlessly discover, download, manage, and interact with a diverse range of local Large Language Models (GGUF focus, with an eye towards future formats and integrations). Go beyond simple chat to fine-tune, experiment, and truly own your AI interactions.
 *   🤖 **Orchestrate Intelligent Agents:** Define, configure, and deploy sophisticated AI agents (powered by frameworks like `smolagents` and beyond). Equip them with tools to automate complex workflows, conduct research, manage tasks, and act as specialized assistants for your projects.
-*   💻 **Supercharge Code Development:** From initial scaffolding and boilerplate generation to advanced debugging, code explanation, refactoring, and automated testing, AiCockpit will be an indispensable co-pilot for software engineers.
+*   �� **Supercharge Code Development:** From initial scaffolding and boilerplate generation to advanced debugging, code explanation, refactoring, and automated testing, AiCockpit will be an indispensable co-pilot for software engineers.
 *   🎨 **Unleash Creative Media Generation:** Extend beyond text and code. Imagine AiCockpit facilitating image generation, audio synthesis, video assistance, and other multimedia creation tasks by integrating with relevant models and tools, all managed within your local cockpit.
 *   ✍️ **Elevate Content Creation:** Whether you're drafting articles, writing scripts, brainstorming ideas, or translating languages, AiCockpit will provide a rich environment for AI-assisted writing and content development.
 *   🔬 **Drive Research & Analysis:** Utilize AI for data analysis, information retrieval, summarization of complex documents, and accelerating your research endeavors across any domain.
@@ -67,13 +87,15 @@ The AiCockpit backend provides a robust set of APIs for:
     *   Stream agent outputs via SSE.
 *   🗂️ **Work Session Management:**
     *   Create, list, update, and delete distinct work sessions.
-    *   Each session has its own isolated data storage.
-*   📋 **Work Board (File System Access):**
-    *   Manage files and directories within each session (list, read, write, delete, move, create directory).
+    *   Each session has its own isolated data storage and AI configuration.
+*   📋 **Workspace File Management (Work Board):**
+    *   Manage files and directories within each session (upload, list, read content, update content, create file/folder, delete file/folder).
+*   🖥️ **Interactive Terminal Service:**
+    *   WebSocket endpoint for PTY-based interactive terminal sessions within a workspace's data directory.
 *   ⚙️ **System & Configuration:**
     *   Endpoints for system health, status, and viewing configurations.
 *   🛡️ **Stability & Testing:**
-    *   Comprehensive test suite with 100% pass rate (as of the last major refactor).
+    *   Comprehensive test suite (though coverage may vary with new features).
     *   Robust dependency injection for modularity.
 
 ### Frontend (In Progress & Rapidly Evolving!)
@@ -92,52 +114,71 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
     *   `KeyMetricsCard` components displaying mock data for Active Agents, CPU/Memory Usage, Alerts, etc.
     *   `SystemHealthChart` (bar chart) and `ModelPerformanceChart` (line chart) with mock data, built using `recharts` and ShadCN chart components.
 *   📄 **Placeholder Pages:** All main navigation items (`Workspaces`, `Logs`, `Alerts`, `History`, `Fleet`) have placeholder pages set up within the app layout.
-*   ⚙️ **UI Components (ShadCN based):** Core elements like `Button`, `Card`, `Tooltip`, `Sheet`, `DropdownMenu`, `Tabs` (base), and `Chart` (base) are integrated.
+*   ⚙️ **UI Components (ShadCN based):** Core elements like `Button`, `Card`, `Tooltip`, `Sheet`, `DropdownMenu`, `Tabs`, `Chart`, `Dialog`, `Input`, `Label`, `Switch`, `AlertDialog` etc., are integrated.
 *   💡 **Persistent Info Widgets:** Toggleable overlay widgets for CPU, Memory, etc., displaying mock data.
-*   🤖 **Genkit Integration (Initial):** Basic structure for Genkit flows (e.g., `summarize-logs`).
-*   🧩 **Workspaces Page (`/interact`):**
-    *   **Project Re-initialization & Styling Fix:** The frontend project (Next.js, Tailwind CSS, ShadCN UI) was re-initialized to resolve fundamental styling and theming issues. The application now correctly displays with the intended dark theme and component styling.
-    *   **Tabbed Interface:** Implemented using ShadCN `Tabs` for managing multiple workspaces.
-    *   **CSS Grid Panel Layout:** The layout within each workspace tab now uses a CSS Grid. The current configuration features a main top row with `FileBrowserPanel` (1 column), `EditorPanel` (3 columns), and `AiChatPanel` (2 columns), and a bottom row dedicated to the `TerminalManagerPanel` (spanning full width).
-    *   **Core Panel Implementation (Mock UIs):** The previously developed panel components (`FileBrowserPanel.tsx`, `EditorPanel.tsx`, `TerminalManagerPanel.tsx`, `AiChatPanel.tsx`, `WorkspaceSettingsPanel.tsx`) have been successfully ported into this new structure. Their mock UIs and basic interactivity (file selection, folder expansion) are functional and correctly styled.
-    *   Simulate client-side file operations and AI interactions as placeholders for backend integration: **Basic file selection linked to editor display is functional.**
-    *   **MHTML Mockup Feature Integration:** An `AiCockpit.mhtml` mockup (previously reviewed for layout) remains a valuable source for feature enhancements within the current panel components. Future work will focus on integrating these richer features (e.g., upload button in File Browser, model selection & advanced settings in AI Chat, internal tabs in Terminal, extensive workspace/model tuning settings in Workspace Settings).
-    *   API client for seamless backend communication (including SSE).
-2.  🤖 **Backend Enhancements (Parallel/Future):**
-    *   **Full `smolagents` Integration:** Implement the agent execution logic beyond the current placeholder.
-    *   **Basic User Authentication:** Simple, secure auth for a local-first setup.
-3.  🌱 **OSS Readiness & Community Building (Ongoing):**
-    *   Enhance API documentation (OpenAPI + narrative docs).
-    *   Create a comprehensive Developer Guide.
-    *   Maintain `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
-
-*(For a more granular breakdown of the backend's history, see the original `AiCockpit outline - Handoff Doc.txt`.)*
+*   🧩 **Workspaces Page (`/interact`): Core Functionality Connected**
+    *   **Tabbed Interface:** For managing multiple workspaces.
+    *   **CSS Grid Panel Layout:** For `FileBrowserPanel`, `EditorPanel`, `AiChatPanel` (with sub-tabs for AI Config & WS Settings), and `TerminalManagerPanel`.
+    *   **`FileBrowserPanel`:** Full CRUD operations for files & folders, connected to backend.
+    *   **`EditorPanel`:** Fetches, displays, and saves file content to/from backend.
+    *   **`AiChatPanel`:** Streams responses from backend LLM service; uses shared AI model configuration.
+    *   **`WorkspaceSettingsPanel`:** Loads and saves workspace name/description to backend.
+    *   **`AIModelConfigurationPanel`:** Loads and saves AI model (ID, temperature) settings to backend per workspace.
+    *   **`TerminalManagerPanel`:** Connects to backend WebSocket PTY for interactive terminal sessions.
 
 ---
 
 ## 🛣️ Roadmap & Current Focus
 
-**High Priority: Enhancing the Frontend Web Interface, particularly the "Workspaces" page.**
+**High Priority: Enhancing the Frontend Web Interface, particularly the "Workspaces" page and connecting it to the backend.**
 
 **Key Milestones & Next Steps:**
 
-1.  🌟 **Frontend Development (Phase 1 - Core UI): In Progress**
-    *   **Technology Selection: Done!** (Next.js, React, TypeScript, ShadCN UI, Tailwind CSS)
-    *   **Core Layout & Navigation: Done!** (AppSidebar, HeaderBar, Toaster, basic page structure)
-    *   **Dashboard (AiSight) Implementation: Done!** (KeyMetricsCards, SystemHealthChart, ModelPerformanceChart with mock data)
-    *   **Persistent Info Widgets: Done!** (Toggleable display of mock system stats)
-    *   **Base UI Components (ShadCN): Done!** (Button, Card, Tooltip, Sheet, DropdownMenu, Tabs, Chart)
-    *   **Workspaces Page (`/interact`): Current Focus - Partially Done**
-        *   Implement tabbed interface for managing multiple workspaces: **Done!**
-        *   Stabilize core styling and theming: **Done!** (Achieved via project re-initialization)
-        *   Develop core panels within a workspace using a CSS Grid layout: **Initial CSS Grid with five core panels (FileBrowser, Editor, TerminalManager, AiChat, WorkspaceSettings) displaying mock UIs and basic interactivity is implemented and styled.**
-        *   Simulate client-side file operations and AI interactions as placeholders for backend integration: **Basic file selection linked to editor display is functional.**
-        *   **MHTML Mockup Feature Integration:** An `AiCockpit.mhtml` mockup (previously reviewed for layout) remains a valuable source for feature enhancements within the current panel components. Future work will focus on integrating these richer features (e.g., upload button in File Browser, model selection & advanced settings in AI Chat, internal tabs in Terminal, extensive workspace/model tuning settings in Workspace Settings).
-    *   API client for seamless backend communication (including SSE).
-2.  🤖 **Backend Enhancements (Parallel/Future):**
-    *   **Full `smolagents` Integration:** Implement the agent execution logic beyond the current placeholder.
-    *   **Basic User Authentication:** Simple, secure auth for a local-first setup.
-3.  🌱 **OSS Readiness & Community Building (Ongoing):**
+1.  🌟 **Frontend Development (Phase 1 - Core UI & Initial Backend Connection)**
+    *   **Technology Selection: ✅ Done!** (Next.js, React, TypeScript, ShadCN UI, Tailwind CSS)
+    *   **Core Layout & Navigation: ✅ Done!** (AppSidebar, HeaderBar, Toaster, basic page structure)
+    *   **Dashboard (AiSight) Implementation: ✅ Done!** (KeyMetricsCards, SystemHealthChart, ModelPerformanceChart with mock data)
+    *   **Persistent Info Widgets: ✅ Done!** (Toggleable display of mock system stats)
+    *   **Base UI Components (ShadCN): ✅ Done!** (Button, Card, Tooltip, Sheet, DropdownMenu, Tabs, Chart, Dialog, Input, Label, Switch, AlertDialog, etc.)
+    *   **Workspaces Page (`/interact`): 🚧 Core Functionality Implemented & Connected**
+        *   Tabbed interface for multiple workspaces: ✅ **Done!**
+        *   Core styling and theming: ✅ **Done!**
+        *   CSS Grid panel layout (FileBrowser, Editor, TerminalManager, AiChat, Settings): ✅ **Done!**
+        *   `FileBrowserPanel`:
+            *   File/Folder Listing (from backend): ✅ **Done!**
+            *   File Upload (to backend): ✅ **Done!**
+            *   Create File/Folder (frontend & backend): ✅ **Done!**
+            *   Delete File/Folder (frontend & backend): ✅ **Done!**
+        *   `EditorPanel`:
+            *   Fetch & Display File Content (from backend): ✅ **Done!**
+            *   Save File Content (to backend): ✅ **Done!**
+        *   `AiChatPanel`:
+            *   Connect to streaming chat backend: ✅ **Done!**
+            *   Basic UI placeholders for model selection: ✅ **Done!**
+        *   `WorkspaceSettingsPanel`:
+            *   UI for name/description, auto-save toggle: ✅ **Done!**
+            *   Save name/description to backend: ✅ **Done!**
+        *   `AIModelConfigurationPanel`:
+            *   UI for model selection, temperature: ✅ **Done!**
+            *   Fetch/Save AI config to backend: ✅ **Done!**
+            *   Share config with `AiChatPanel`: ✅ **Done!**
+        *   `TerminalManagerPanel`:
+            *   Connect to backend WebSocket PTY: ✅ **Done!** (Verification pending stable backend startup)
+            *   Xterm.js integration with fit and attach addons: ✅ **Done!**
+    *   API client for seamless backend communication (including SSE): 🚧 **Partially Done** (Implemented on a per-component basis)
+    *   Next.js backend proxy/rewrites for API calls: ✅ **Done!**
+
+2.  🤖 **Backend Enhancements (Foundation & Workspace Features)**
+    *   Core FastAPI setup, modular routers, dependency injection: ✅ **Done!**
+    *   LLM Service (`/llm` endpoints for models, chat completions): ✅ **Done!**
+    *   Work Session Management (`/sessions` endpoints for CRUD, AI config): ✅ **Done!**
+    *   Workspace Files Module (`/workspaces/sessions/.../files` endpoints):
+        *   Upload, List, Get Content, Update Content, Create, Delete: ✅ **Done!**
+    *   Terminal Service (`/terminals` WebSocket endpoint): ✅ **Done!** (Verification pending stable startup)
+    *   **Full `smolagents` Integration:** ⏳ Implement the agent execution logic beyond the current placeholder.
+    *   **Basic User Authentication:** ⏳ Simple, secure auth for a local-first setup.
+
+3.  🌱 **OSS Readiness & Community Building (Ongoing)**
     *   Enhance API documentation (OpenAPI + narrative docs).
     *   Create a comprehensive Developer Guide.
     *   Maintain `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
@@ -153,13 +194,15 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
 *   **Agent Framework:** `smolagents` (initial integration)
 *   **Async & Streaming:** `asyncio`, `anyio`, `sse-starlette`
 *   **Data Validation:** Pydantic v2, Pydantic-Settings
+*   **File Handling:** `python-multipart`
+*   **Terminal:** `ptyprocess`
 *   **DevOps:** PDM (dependency management), `pytest` (testing), Ruff (linting), Black (formatting)
 *   **Frontend:**
-    *   Framework: Next.js (v15.2.3, App Router)
-    *   UI Library: React (v18.3.1), ShadCN UI
+    *   Framework: Next.js (v15.3.2, App Router)
+    *   UI Library: React (v19.0.0), ShadCN UI
     *   Language: TypeScript
     *   Styling: Tailwind CSS, CSS Variables (custom theme)
-    *   AI Toolkit Integration: Genkit (v1.8.0, initial setup)
+    *   Terminal UI: Xterm.js (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-attach`)
     *   Icons: lucide-react
     *   Charting: recharts (via ShadCN chart components)
 
@@ -187,50 +230,50 @@ Ready to jump in? Here's how to get AiCockpit up and running:
     *   Edit `.env` (especially `ACP_BASE_DIR`, `MODELS_DIR`).
 *   **Run the Backend:**
     ```bash
-    pdm run dev
+    # From the project root directory (e.g., /home/g/Ai/AiCockpit)
+    pdm run uvicorn acp_backend.main:app --reload --port 8000
     ```
-    *   Server usually starts on `http://localhost:8000`.
+    *   Server usually starts on `http://127.0.0.1:8000`.
     *   API docs at `http://localhost:8000/docs`.
 
 ### 2. Frontend Setup
 
 *   **Prerequisites:**
-    *   Node.js (v18.x or later recommended) and npm/yarn.
+    *   Node.js (v18.x or later recommended) and npm.
 *   **Navigate to Frontend Directory:**
     ```bash
+    # From the project root directory (e.g., /home/g/Ai/AiCockpit)
     cd acp_frontend
     ```
 *   **Install Dependencies:**
     ```bash
     npm install
-    # OR
-    # yarn install
     ```
-    *   This will install Next.js, React, ShadCN UI dependencies (including Radix UI primitives), `recharts`, `lucide-react`, Genkit tools, etc., as defined in `package.json`.
+    *   This will install Next.js, React, ShadCN UI dependencies, Xterm.js, etc., as defined in `package.json`.
 *   **Run the Frontend Development Server:**
     ```bash
+    # From the acp_frontend directory
     npm run dev
-    # OR
-    # yarn dev
     ```
-    *   The frontend application usually starts on `http://localhost:3000`.
+    *   The frontend application usually starts on `http://localhost:3000` (or an available port if 3000 is in use).
 
 ### 3. Linting & Formatting
 
-*   **Backend:**
+*   **Backend (from project root):**
     ```bash
     pdm run lint
     pdm run format
     ```
-*   **Frontend:** (Assuming standard Next.js/ESLint setup)
+*   **Frontend (from `acp_frontend` directory):**
     ```bash
     npm run lint
-    npm run format # If a format script is configured in package.json
+    # Add a format script to package.json if desired, e.g., using Prettier
+    # "format": "prettier --write ." 
     ```
 
 ### 4. Running Tests
 
-*   **Backend:**
+*   **Backend (from project root):**
     ```bash
     pdm run test
     ```
@@ -245,73 +288,22 @@ Ready to jump in? Here's how to get AiCockpit up and running:
 *   **Branching Strategy:** Use feature branches (e.g., `feature/HG-123-new-dashboard-widget` or `fix/HG-456-login-bug`). Create Pull Requests for review before merging to `main` or `develop` branch.
 *   **Code Style:**
     *   **Backend (Python):** Adhere to Black for formatting and Ruff for linting (configured in `pyproject.toml`).
-    *   **Frontend (TypeScript/React):** Adhere to Prettier/ESLint configurations (typically in `package.json` and `.eslintrc.js`).
+    *   **Frontend (TypeScript/React):** Adhere to Prettier/ESLint configurations (typically in `package.json` and relevant config files).
 *   **Component Design (Frontend):**
     *   Favor functional components with React Hooks.
-    *   Strive for modular, reusable components. Place general UI primitives in `src/components/ui/` and feature-specific components in `src/components/[feature]/`.
-    *   Utilize ShadCN UI components as a base and customize as needed.
-    *   Clearly define props using TypeScript interfaces.
-*   **State Management (Frontend):**
-    *   Lift state to the lowest common ancestor. For more complex global state, consider Zustand or React Context if useState/props become unwieldy.
-    *   "use client" directive for components requiring client-side interactivity or browser APIs. Default to Server Components where possible for performance.
-*   **Styling (Frontend):**
-    *   Utility-first with Tailwind CSS.
-    *   Use the `cn` utility from `@/lib/utils` for conditional class names.
-    *   Leverage HSL CSS variables in `globals.css` for theming.
-*   **API Interaction:**
-    *   Backend APIs are defined with FastAPI and documented via OpenAPI (`/docs`).
-    *   Frontend should create typed service functions for API calls, potentially in `src/lib/api.ts` or similar.
-*   **Testing:**
-    *   **Backend:** Write unit tests for new logic and integration tests for API endpoints. Aim for high test coverage.
-    *   **Frontend:** (Future) Implement unit/integration tests for components and critical user flows using Jest/React Testing Library or Vitest.
-*   **Documentation:**
-    *   Document non-trivial code with JSDoc/TSDoc or Python docstrings.
-    *   Keep `README.md` and other architectural documents up-to-date with major changes.
-    *   For UI components, consider using Storybook in the future for isolated development and documentation.
-*   **AI Collaboration:**
-    *   When pair-programming with an AI, provide clear context (relevant files, detailed instructions).
-    *   Review AI-generated code cambios thoroughly.
-    *   Iterate with the AI; don't expect perfect solutions on the first try.
-    *   Use the AI to help with boilerplate, refactoring, writing tests, and explaining code.
-
-### AI Collaboration & Handoff Document
-
-*   **General AI Collaboration:**
-    *   When pair-programming with an AI, provide clear context (relevant files, detailed instructions).
-    *   Review AI-generated code changes thoroughly.
-    *   Iterate with the AI; don't expect perfect solutions on the first try.
-    *   Use the AI to help with boilerplate, refactoring, writing tests, and explaining code.
-*   **`ACP Handoffdoc.txt` (For AI Assistants):**
-    *   This document (located at the project root) serves as a persistent memory and handoff mechanism between AI-assisted development sessions.
-    *   Its purpose is for the AI assistant to log a summary of work completed, current project status, key decisions, and next steps at the end of a work session.
-    *   This allows any AI assistant (the same one in a new session, or a different one) to quickly get up to speed on the project's state.
-    *   The AI assistant is encouraged to manage this file, including summarizing or pruning very old information to keep it relevant and manageable.
-    *   *Note: This file is primarily for AI-to-AI communication, not as primary human-readable project documentation, though it can serve as a detailed historical log.*
+    *   Ensure components are modular and reusable where appropriate.
+*   **Error Handling:** Implement comprehensive error handling on both frontend and backend to provide clear feedback to users and developers.
+*   **Security:** Be mindful of security best practices, especially for file operations, API endpoints, and any user authentication mechanisms.
 
 ---
 
-## 🛠 How to Contribute
+## 🤝 Contributing
 
-We're thrilled you're considering contributing! Here's how you can help:
-
-1.  **Check out the Roadmap:** See what's currently in focus.
-2.  **Browse Open Issues:** Look for `good first issue` or `help wanted` tags (we'll add these soon!).
-3.  **Discuss Your Ideas:** Open an issue or join our (future) communication channel to discuss potential changes or new features.
-4.  **Fork & Pull Request:**
-    *   Fork the repository.
-    *   Create a new branch for your feature or bugfix.
-    *   Make your changes, adhering to code style (run formatters).
-    *   Ensure tests pass. Add new tests for new functionality.
-    *   Submit a pull request with a clear description of your changes.
-
-Detailed contribution guidelines will be in `CONTRIBUTING.md`.
+Contributions are welcome! Please refer to `CONTRIBUTING.md` for detailed guidelines on how to contribute to AiCockpit.
+The `CODE_OF_CONDUCT.md` outlines the expectations for community interactions.
 
 ---
 
 ## 📜 License
 
-AiCockpit is licensed under the [MIT License](LICENSE).
-
----
-
-*(The more detailed project history, initial planning, and in-depth component descriptions are preserved in `AiCockpit outline - Handoff Doc.txt` for reference.)*
+AiCockpit is licensed under the MIT License. See the `LICENSE` file for more details.
