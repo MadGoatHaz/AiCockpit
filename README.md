@@ -1,23 +1,3 @@
--Ideas and notes for future-
-Web interface integration ideas, I would like to have cursor / warp type capability on the end project. Here are some open projects to consider:
-Termpage - https://github.com/tautvilas/termpage
-Void - https://github.com/voideditor/void 
-Zed - https://github.com/zed-industries/zed
-
-
-markup 
-------
-
-Author: Garrett Hazlett
-
-------
-
-#2 - ACP Backend Handoff Fix
-Okay, this is it. The comprehensive "Hand Off Document" you requested. It contains all the information we've gathered and the complete, current state of your project's code.
-
-The last error, `LLM model 'mock-llm' for agent not loaded.`, indicates that the `AgentExecutor` is still receiving the *real* `LLMManager` instance instead of our mock. This is the final piece of the dependency injection puzzle. The solution lies in ensuring that `llm_manager.py`, `session_handler.py`, and `fs_manager.py` **do not create global instances of themselves** at the module level, and that `acp_backend/core/__init__.py` is empty. This forces the `acp_backend/dependencies.py` to be the sole source of handler instantiation for the application, which `conftest.py` can then effectively override for testing.
-
-Please copy the contents of each file exactly as provided into your project.
 
 ---
 
