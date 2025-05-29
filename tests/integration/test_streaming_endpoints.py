@@ -17,10 +17,10 @@ from anyio._backends._asyncio import Event as AsyncioAnyioEvent
 
 from acp_backend.models.llm_models import (
     ChatCompletionRequest, 
-    ChatCompletionChunk, 
-    ChatMessageInput,
-    ChatCompletionChunkDelta,
-    ChatCompletionChunkChoice
+    LLMChatCompletionChunk,
+    LLMChatMessage,
+    LLMChatCompletionChunkDelta,
+    LLMChatCompletionChunkChoice
 )
 from acp_backend.models.agent_models import ( 
     RunAgentRequest,
@@ -46,10 +46,10 @@ async def mock_chat_completion_stream_generator(
     
     # Create a single chunk
     chunk_content = "Test Stream Chunk 1"
-    delta = ChatCompletionChunkDelta(content=chunk_content, role="assistant") # Role for first chunk
-    choice = ChatCompletionChunkChoice(index=0, delta=delta, finish_reason="stop") # Single chunk, so finish
+    delta = LLMChatCompletionChunkDelta(content=chunk_content, role="assistant") # Role for first chunk
+    choice = LLMChatCompletionChunkChoice(index=0, delta=delta, finish_reason="stop") # Single chunk, so finish
     current_time_int_s = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-    chunk = ChatCompletionChunk(
+    chunk = LLMChatCompletionChunk(
         id=base_id, 
         object="chat.completion.chunk", 
         created=current_time_int_s, 
@@ -58,7 +58,7 @@ async def mock_chat_completion_stream_generator(
     )
     
     print(f"[MOCK_GENERATOR] Yielding chunk: {chunk.model_dump_json(indent=2)}")
-    yield chunk.model_dump(mode="json")
+    yield chunk # Yield the Pydantic model object directly
     print("[MOCK_GENERATOR] Finished mock_chat_completion_stream_generator.")
 
 @pytest.fixture
@@ -105,74 +105,69 @@ async def test_stream_llm_chat_completions(
 ):
     test_llm_manager.stream_process_chat_completion.side_effect = mock_chat_completion_stream_generator
     model_id_to_test = "mock-llm" 
-    chat_request_payload = ChatCompletionRequest(model_id=model_id_to_test, messages=[ChatMessageInput(role="user", content="Hello stream!")], stream=True, max_tokens=50)
-    received_chunks: List[ChatCompletionChunk] = []
+    chat_request_payload = ChatCompletionRequest(model_id=model_id_to_test, messages=[LLMChatMessage(role="user", content="Hello stream!")], stream=True, max_tokens=50)
+    received_chunks: List[LLMChatCompletionChunk] = []
     
-    # The anyio.create_task_group() might not be needed if the patch works,
-    # but keeping it for now as it doesn't harm.
-    async with test_client.stream("POST", "/api/llm/chat/completions", json=chat_request_payload.model_dump(mode="json")) as response:
+    async with test_client.stream("POST", "/llm/chat/completions", json=chat_request_payload.model_dump(mode="json")) as response:
         assert response.status_code == status.HTTP_200_OK
         assert "text/event-stream" in response.headers.get("content-type", "")
         
-        buffer = ""
-        await asyncio.sleep(0) # Allow event loop to switch tasks
+        full_response_text = ""
         async for text_chunk in response.aiter_text():
-            buffer += text_chunk
-            while "\n\n" in buffer:
-                message, buffer = buffer.split("\n\n", 1)
-                data_payload_str = None
-                event_field_from_sse = None # To capture event: error
-                for line in message.splitlines():
-                    if line.startswith("data:"):
-                        data_payload_str = line[len("data:"):].strip()
-                    elif line.startswith("event:"):
-                        event_field_from_sse = line[len("event:"):].strip()
-                
-                if event_field_from_sse == "error" and data_payload_str:
-                    # This means the server explicitly sent an error event
-                    pytest.fail(f"Server sent error event: data: {data_payload_str}")
-
-                if data_payload_str:
-                    try:
-                        chunk_obj = ChatCompletionChunk.model_validate_json(data_payload_str)
-                        received_chunks.append(chunk_obj)
-                    except Exception as e: 
-                        pytest.fail(f"Failed to validate ChatCompletionChunk from SSE event: {repr(data_payload_str)}. Error: {e}")
+            full_response_text += text_chunk
         
-        # After the loop, process any remaining data in the buffer
-        if buffer.strip(): # Process if buffer has non-whitespace content
-            message = buffer # Treat the remainder as one message
+        print(f"[TEST_DEBUG] Full response text (repr):\n{repr(full_response_text)}") # DEBUG with repr
+
+        buffer = full_response_text
+        # Use \r\n\r\n as separator, consistent with SSE spec and observed output
+        while "\r\n\r\n" in buffer:
+            message, buffer = buffer.split("\r\n\r\n", 1)
             data_payload_str = None
             event_field_from_sse = None
-            for line in message.splitlines(): # Process lines as usual
+            # Split lines within a message by \r\n or \n for flexibility
+            lines_in_message = message.replace("\r\n", "\n").split('\n')
+            print(f"[TEST_DEBUG] SSE Message Block (lines: {lines_in_message}):\n{message}")
+            for line in lines_in_message:
                 if line.startswith("data:"):
                     data_payload_str = line[len("data:"):].strip()
                 elif line.startswith("event:"):
-                        event_field_from_sse = line[len("event:"):].strip()
+                    event_field_from_sse = line[len("event:"):].strip()
             
-            if event_field_from_sse == "error" and data_payload_str:
-                    pytest.fail(f"Server sent error event from remaining buffer: data: {data_payload_str}")
+            print(f"[TEST_DEBUG] Parsed Event: '{event_field_from_sse}', Data Present: {bool(data_payload_str)}, Data: '{data_payload_str}'") # RE-ADD & ENHANCE FOR DEBUGGING
 
-            if data_payload_str:
+            if event_field_from_sse == "error":
+                pytest.fail(f"Server sent error event: data: {data_payload_str}")
+            elif event_field_from_sse == "eos":
+                print(f"Received EOS event with data: {data_payload_str}")
                 try:
-                    chunk_obj = ChatCompletionChunk.model_validate_json(data_payload_str)
+                    eos_data = json.loads(data_payload_str)
+                    assert "message" in eos_data
+                except (json.JSONDecodeError, AssertionError) as e:
+                    pytest.fail(f"Invalid EOS event data: {data_payload_str}. Error: {e}")
+            elif data_payload_str: # Assumes "message" type or None
+                try:
+                    chunk_obj = LLMChatCompletionChunk.model_validate_json(data_payload_str)
                     received_chunks.append(chunk_obj)
                 except Exception as e:
-                    pytest.fail(f"Failed to validate ChatCompletionChunk from SSE event (remaining buffer): {repr(data_payload_str)}. Error: {e}")
-    
-    assert len(received_chunks) == 1, f"Expected 1 chunk, got {len(received_chunks)}"
+                    pytest.fail(f"Failed to validate ChatCompletionChunk: {repr(data_payload_str)}. Error: {e}")
+        
+        # Removed the separate "if buffer.strip():" block as it's covered by processing full_response_text
+            
+    assert len(received_chunks) == 1, f"Expected 1 chunk, got {len(received_chunks)}. Chunks: {received_chunks}"
+    if received_chunks: # Additional check for content if needed
+        assert received_chunks[0].choices[0].delta.content == "Test Stream Chunk 1"
     test_llm_manager.stream_process_chat_completion.assert_called_once()
 
 
 async def mock_agent_output_stream_generator(
     request: RunAgentRequest, 
     num_outputs: int = 3 
-) -> AsyncGenerator[Dict[str, Any], None]:
+) -> AsyncGenerator[AgentOutputChunk, None]:
     run_id = f"agent-run-mock-{uuid.uuid4()}"
     event_types = ["status", "step", "output"] 
     
     chunk_start = AgentOutputChunk(run_id=run_id, type="status", data={"message": "Agent task started."})
-    yield chunk_start.model_dump(mode="json")
+    yield chunk_start # Yield Pydantic model directly
 
     for i in range(num_outputs):
         event_type = event_types[i % len(event_types)]
@@ -185,10 +180,10 @@ async def mock_agent_output_stream_generator(
             data_payload = {"content": f"Agent output chunk {i+1} for '{request.input_prompt}'."}
         
         chunk_loop = AgentOutputChunk(run_id=run_id, type=event_type, data=data_payload)
-        yield chunk_loop.model_dump(mode="json")
+        yield chunk_loop # Yield Pydantic model directly
     
     chunk_end = AgentOutputChunk(run_id=run_id, type="status", data={"message": "Agent task completed.", "final": True})
-    yield chunk_end.model_dump(mode="json")
+    yield chunk_end # Yield Pydantic model directly
 
 
 async def test_stream_agent_task_outputs(
@@ -219,7 +214,7 @@ async def test_stream_agent_task_outputs(
         expected_num_events = 1 + 3 + 1 
 
         try:
-            async with test_client.stream("POST", "/api/agents/run/stream", json=run_request.model_dump(mode="json")) as response:
+            async with test_client.stream("POST", "/agents/run/stream", json=run_request.model_dump(mode="json")) as response:
                 assert response.status_code == status.HTTP_200_OK, f"Expected 200, got {response.status_code}. Response text: {await response.aread()}"
                 assert "text/event-stream" in response.headers.get("content-type", "")
 
@@ -230,49 +225,54 @@ async def test_stream_agent_task_outputs(
                     buffer += text_chunk.replace('\r\n', '\n').replace('\r', '\n')
                 while "\n\n" in buffer:
                         message, buffer = buffer.split("\n\n", 1)
-                        event_type_from_sse = "message" 
-                        data_payload_str = None
+                        event_type_from_sse = None
                         for line in message.splitlines():
-                            if line.startswith("event:"):
-                                event_type_from_sse = line[len("event:"):].strip()
-                            elif line.startswith("data:"):
+                            if line.startswith("data:"):
                                 data_payload_str = line[len("data:"):].strip()
+                            elif line.startswith("event:"):
+                                event_type_from_sse = line[len("event:"):].strip()
                         
                         if event_type_from_sse == "error" and data_payload_str:
-                            pytest.fail(f"Server sent error event: event: {event_type_from_sse} data: {data_payload_str}")
+                            pytest.fail(f"Server sent error event: data: {data_payload_str}")
 
                         if data_payload_str:
+                            # For agent outputs, all events should be parsable as AgentOutputChunk
+                            # The 'eos' event is not standard here, errors are handled by the 'error' event type.
                             try:
                                 data_obj = AgentOutputChunk.model_validate_json(data_payload_str)
+                                # Check if the event type from SSE matches the type in the data, if available
+                                if event_type_from_sse and hasattr(data_obj, 'type') and event_type_from_sse != data_obj.type:
+                                    print(f"Warning: SSE event type '{event_type_from_sse}' mismatches data type '{data_obj.type}'")
                                 received_events_data.append(data_obj)
                             except Exception as e:
-                                pytest.fail(f"Failed to parse/validate AgentOutputChunk: '{data_payload_str}'. SSE Event: {event_type_from_sse}. Error: {e}")
+                                pytest.fail(f"Failed to validate AgentOutputChunk from SSE event: {repr(data_payload_str)}. Error: {e}")
         except Exception as client_exc: 
             pytest.fail(f"Exception during test_client.stream or SSE iteration: {client_exc}")
 
         # After the loop, process any remaining data in the buffer
-        if buffer.strip(): # Process if buffer has non-whitespace content
-            message = buffer # Treat the remainder as one message
-            event_type_from_sse = "message" # Default if no event field
+        if buffer.strip():
+            message = buffer
             data_payload_str = None
-            for line in message.splitlines(): # Process lines as usual
-                if line.startswith("event:"):
-                    event_type_from_sse = line[len("event:"):].strip()
-                elif line.startswith("data:"):
+            event_type_from_sse = None
+            for line in message.splitlines():
+                if line.startswith("data:"):
                     data_payload_str = line[len("data:"):].strip()
-            
-            if event_type_from_sse == "error" and data_payload_str:
-                # This means the server explicitly sent an error event
-                pytest.fail(f"Server sent error event from remaining buffer: event: {event_type_from_sse} data: {data_payload_str}")
+                elif line.startswith("event:"):
+                    event_type_from_sse = line[len("event:"):].strip()
 
+            if event_type_from_sse == "error" and data_payload_str:
+                pytest.fail(f"Server sent error event from remaining buffer: data: {data_payload_str}")
+            
             if data_payload_str:
                 try:
                     data_obj = AgentOutputChunk.model_validate_json(data_payload_str)
+                    if event_type_from_sse and hasattr(data_obj, 'type') and event_type_from_sse != data_obj.type:
+                         print(f"Warning: SSE event type '{event_type_from_sse}' (remaining buffer) mismatches data type '{data_obj.type}'")
                     received_events_data.append(data_obj)
                 except Exception as e:
-                    pytest.fail(f"Failed to parse/validate AgentOutputChunk from remaining buffer: '{repr(data_payload_str)}'. SSE Event: {event_type_from_sse}. Error: {e}")
+                    pytest.fail(f"Failed to validate AgentOutputChunk from SSE event (remaining buffer): {repr(data_payload_str)}. Error: {e}")
 
-        assert len(received_events_data) == expected_num_events, f"Expected {expected_num_events} events, got {len(received_events_data)}"
+        assert len(received_events_data) == expected_num_events, f"Expected {expected_num_events} agent events, got {len(received_events_data)}. Events: {received_events_data}"
 
         assert received_events_data[0].type == "status"
         assert received_events_data[0].data["message"] == "Agent task started."

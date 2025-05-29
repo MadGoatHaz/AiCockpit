@@ -12,49 +12,63 @@ from unittest.mock import AsyncMock
 import shutil # ADDED IMPORT
 
 from acp_backend.models.agent_models import AgentConfig
-from acp_backend.models.work_session_models import WorkSession
+from acp_backend.models.work_session_models import SessionMetadata
 from acp_backend.core.agent_config_handler import AgentConfigHandler
-from acp_backend.core.session_handler import LOCAL_AGENTS_DIR_NAME, SESSION_DATA_DIRNAME 
-from acp_backend.config import Settings 
+from acp_backend.core.session_handler import SESSION_AGENTS_DIRNAME, SESSION_DATA_DIRNAME 
+from acp_backend.config import AppSettings
 from acp_backend.core.session_handler import SessionHandler as SessionHandlerClass 
 
 
-mocked_session_handler_for_ach_tests = mock.Mock(spec=SessionHandlerClass)
-mocked_session_handler_for_ach_tests.get_session = AsyncMock()
-mocked_session_handler_for_ach_tests._get_session_folder_path = mock.Mock() 
-mocked_session_handler_for_ach_tests._validate_session_id_format = mock.Mock()
-mocked_session_handler_for_ach_tests._get_session_data_path = mock.Mock() 
+# mocked_session_handler_for_ach_tests = mock.Mock(spec=SessionHandlerClass)
+# mocked_session_handler_for_ach_tests.get_session = AsyncMock() # Old name
+mocked_session_handler_for_ach_tests = AsyncMock(spec=SessionHandlerClass) # Make the whole mock an AsyncMock
+mocked_session_handler_for_ach_tests.get_session_metadata = AsyncMock() # Correct method name
 
+# Remove these as they are attributes of the AsyncMock now, or can be configured per test if needed
+# mocked_session_handler_for_ach_tests._get_session_folder_path = mock.Mock() 
+# mocked_session_handler_for_ach_tests._validate_session_id_format = mock.Mock()
+# mocked_session_handler_for_ach_tests._get_session_data_path = mock.Mock() 
 
 @pytest.fixture(autouse=True)
 def reset_global_mocked_session_handler(): 
-    mocked_session_handler_for_ach_tests.get_session.reset_mock()
-    mocked_session_handler_for_ach_tests._get_session_folder_path.reset_mock()
-    mocked_session_handler_for_ach_tests._validate_session_id_format.reset_mock()
-    mocked_session_handler_for_ach_tests._get_session_data_path.reset_mock()
-    mocked_session_handler_for_ach_tests.get_session.side_effect = None
-    mocked_session_handler_for_ach_tests._get_session_folder_path.side_effect = None
-    mocked_session_handler_for_ach_tests._validate_session_id_format.side_effect = None
-    mocked_session_handler_for_ach_tests._get_session_data_path.side_effect = None
+    mocked_session_handler_for_ach_tests.reset_mock() # Resets all attributes including those set with side_effect
+    # Re-attach specific AsyncMocks for methods that need to be awaited or have side_effects controlled per test
+    mocked_session_handler_for_ach_tests.get_session_metadata = AsyncMock(return_value=None) # Default return_value
+    # If other methods of session_handler are called by AgentConfigHandler and need mocking, set them up here too.
+    # For example, SessionHandler._get_session_path is called by AgentConfigHandler._get_local_agent_configs_base_path
+    # This needs to be a regular mock if AgentConfigHandler calls it synchronously on the instance.
+    # However, AgentConfigHandler actually calls getattr(self.session_handler, '_get_session_path')(session_id)
+    # This is problematic. AgentConfigHandler should use a public interface of SessionHandler.
+    # For now, let's assume SessionHandler provides a public get_local_agent_configs_path which is async.
+    # Based on previous SessionHandler edit, it's get_local_agent_configs_path(self, session_id: uuid.UUID) -> Path (async)
+    mocked_session_handler_for_ach_tests.get_local_agent_configs_path = AsyncMock()
+    # And _validate_session_id_format is also called via getattr.
+    # This should also be part of a public interface or handled internally by SessionHandler.
+    # If AgentConfigHandler calls _validate_session_id_format directly, it should be mocked:
+    # mocked_session_handler_for_ach_tests._validate_session_id_format = mock.Mock() # Not async
 
 
 @pytest.fixture
 def handler(tmp_path: Path) -> AgentConfigHandler:
     # Create a distinct Settings instance for these unit tests to avoid conflicts
     # with global patching done in integration tests.
-    ach_unit_test_settings = Settings(
+    ach_unit_test_settings = AppSettings(
         WORK_SESSIONS_DIR=tmp_path / "ach_unit_test_work_sessions",
         # GLOBAL_AGENT_CONFIGS_DIR_NAME is taken from the default in Settings model
+        # Explicitly set ACP_BASE_DIR as well if WORK_SESSIONS_DIR is not absolute or needs a specific root
+        ACP_BASE_DIR=tmp_path # Ensures WORK_SESSIONS_DIR is resolved correctly if it's relative
     )
     # Ensure the paths for this specific settings instance exist
     ach_unit_test_settings.WORK_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    ach_unit_test_settings.get_global_agent_configs_path().mkdir(parents=True, exist_ok=True)
+    # Use the property GLOBAL_AGENT_CONFIGS_DIR directly
+    ach_unit_test_settings.GLOBAL_AGENT_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
     
     test_handler = AgentConfigHandler(
         session_handler_instance=mocked_session_handler_for_ach_tests,
         settings_override=ach_unit_test_settings 
     )
-    assert test_handler.global_configs_base_path == ach_unit_test_settings.get_global_agent_configs_path()
+    # Assert against the property
+    assert test_handler.global_configs_base_path == ach_unit_test_settings.GLOBAL_AGENT_CONFIGS_DIR
     yield test_handler
 
 @pytest.mark.asyncio
@@ -135,112 +149,127 @@ async def test_delete_global_agent_config(handler: AgentConfigHandler, tmp_path:
     assert await handler.get_global_agent_config(agent_id) is None
 
 
-def mock_session_paths_for_ach_tests(session_id: str, tmp_path: Path, session_exists: bool = True):
+def mock_session_paths_for_ach_tests(session_uuid: uuid.UUID, tmp_path: Path, session_exists: bool = True):
+    session_id_str = str(session_uuid)
     session_base_path_for_test = tmp_path / "sessions_root_for_ach" 
-    session_folder = session_base_path_for_test / session_id
+    session_folder = session_base_path_for_test / session_id_str
     
-    mocked_session_handler_for_ach_tests._get_session_folder_path.return_value = session_folder
-    mocked_session_handler_for_ach_tests._get_session_data_path.return_value = session_folder / SESSION_DATA_DIRNAME
-    if session_exists:
-        mocked_session_handler_for_ach_tests.get_session.return_value = WorkSession(
-            session_id=session_id, name="Test Session", 
-            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            last_accessed=datetime.datetime.now(datetime.timezone.utc).isoformat()
-        )
-        session_folder.mkdir(parents=True, exist_ok=True)
-        (session_folder / LOCAL_AGENTS_DIR_NAME).mkdir(parents=True, exist_ok=True)
-    else:
-        mocked_session_handler_for_ach_tests.get_session.return_value = None
-    mocked_session_handler_for_ach_tests._validate_session_id_format.return_value = None
+    # Configure the get_local_agent_configs_path mock directly
+    local_agents_dir = session_folder / SESSION_AGENTS_DIRNAME
+    mocked_session_handler_for_ach_tests.get_local_agent_configs_path.return_value = local_agents_dir
 
+    if session_exists:
+        metadata = SessionMetadata(
+            id=session_uuid, name="Test Session", 
+            created_at=datetime.datetime.now(datetime.timezone.utc),
+            updated_at=datetime.datetime.now(datetime.timezone.utc)
+        )
+        mocked_session_handler_for_ach_tests.get_session_metadata.return_value = metadata
+        # AgentConfigHandler will call session_handler.get_local_agent_configs_path,
+        # which should create the directory. So we don't create it here explicitly in the mock setup.
+        # If the actual implementation of get_local_agent_configs_path (async) in SessionHandler creates it, that's fine.
+    else:
+        mocked_session_handler_for_ach_tests.get_session_metadata.return_value = None
+    # _validate_session_id_format is internal to SessionHandler, AgentConfigHandler should not call it.
+    # If it must, it would need to be mocked: mocked_session_handler_for_ach_tests._validate_session_id_format.return_value = None
 
 @pytest.mark.asyncio
 async def test_save_and_get_local_agent_config(handler: AgentConfigHandler, tmp_path: Path):
-    session_id = "test_session_1_ach"
+    session_uuid = uuid.uuid4() # Use actual UUID
     agent_id = str(uuid.uuid4())
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
 
     config_data = AgentConfig(agent_id=agent_id, name="Local Agent", agent_type="CodeAgent", llm_model_id="local-llm")
-    await handler.save_local_agent_config(session_id, config_data)
+    await handler.save_local_agent_config(str(session_uuid), config_data) # ACH expects str session_id for now
 
-    expected_local_agents_dir = tmp_path / "sessions_root_for_ach" / session_id / LOCAL_AGENTS_DIR_NAME
+    # The path is now taken from the mocked get_local_agent_configs_path
+    expected_local_agents_dir = mocked_session_handler_for_ach_tests.get_local_agent_configs_path.return_value
     expected_file = expected_local_agents_dir / f"{agent_id}.json"
     assert await asyncio.to_thread(expected_file.exists)
 
-    retrieved_config = await handler.get_local_agent_config(session_id, agent_id)
+    retrieved_config = await handler.get_local_agent_config(str(session_uuid), agent_id)
     assert retrieved_config is not None
     assert retrieved_config.agent_id == agent_id
     assert retrieved_config.created_at == retrieved_config.updated_at
 
 @pytest.mark.asyncio
 async def test_get_local_agent_config_session_not_found_returns_none(handler: AgentConfigHandler, tmp_path: Path):
-    session_id = "non_existent_session_ach"
+    session_uuid = uuid.uuid4()
     agent_id = str(uuid.uuid4())
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=False)
-    result = await handler.get_local_agent_config(session_id, agent_id)
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=False)
+    result = await handler.get_local_agent_config(str(session_uuid), agent_id)
     assert result is None
 
 @pytest.mark.asyncio
 async def test_save_local_agent_config_session_not_found(handler: AgentConfigHandler):
-    session_id = "non_existent_session_for_save_ach"
+    session_uuid = uuid.uuid4()
     agent_id = str(uuid.uuid4())
-    mocked_session_handler_for_ach_tests.get_session.return_value = None 
+    # Setup the mock for get_session_metadata to return None for this specific UUID
+    mocked_session_handler_for_ach_tests.get_session_metadata.return_value = None
+        
     config_data = AgentConfig(agent_id=agent_id, name="Local Agent", agent_type="CodeAgent", llm_model_id="local-llm")
-    with pytest.raises(FileNotFoundError, match=f"Work Session ID '{session_id}' not found"):
-        await handler.save_local_agent_config(session_id, config_data)
+    with pytest.raises(FileNotFoundError, match=f"Work Session ID '{str(session_uuid)}' not found"):
+        await handler.save_local_agent_config(str(session_uuid), config_data)
 
 @pytest.mark.asyncio
 async def test_list_local_agent_configs(handler: AgentConfigHandler, tmp_path: Path):
-    session_id = "session_for_listing_ach"
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
+    session_uuid = uuid.uuid4()
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
     
-    local_agents_dir = tmp_path / "sessions_root_for_ach" / session_id / LOCAL_AGENTS_DIR_NAME
-    if await asyncio.to_thread(local_agents_dir.exists):
-        for item in await asyncio.to_thread(list, local_agents_dir.glob("*.json")): 
-            await asyncio.to_thread(item.unlink)
-    else:
-        await asyncio.to_thread(local_agents_dir.mkdir, parents=True, exist_ok=True)
+    local_agents_dir = mocked_session_handler_for_ach_tests.get_local_agent_configs_path.return_value
+    # Ensure the directory exists for globbing, as AgentConfigHandler._write_agent_config_file creates it.
+    # In a real scenario, save_local_agent_config would have created it.
+    # For list, we need it to exist if we expect to find files.
+    await asyncio.to_thread(local_agents_dir.mkdir, parents=True, exist_ok=True)
+    
+    # Clear any existing dummy files if needed (though mock setup should handle this)
+    for item in await asyncio.to_thread(list, local_agents_dir.glob("*.json")): 
+        await asyncio.to_thread(item.unlink)
 
     ids = [str(uuid.uuid4()) for _ in range(2)]
     config1 = AgentConfig(agent_id=ids[0], name="Local1", agent_type="CodeAgent", llm_model_id="llm1")
-    await handler.save_local_agent_config(session_id, config1)
+    await handler.save_local_agent_config(str(session_uuid), config1)
     await asyncio.sleep(0.05) 
     config2 = AgentConfig(agent_id=ids[1], name="Local2", agent_type="ToolAgent", llm_model_id="llm2")
-    await handler.save_local_agent_config(session_id, config2)
+    await handler.save_local_agent_config(str(session_uuid), config2)
 
-    listed_configs = await handler.list_local_agent_configs(session_id)
+    listed_configs = await handler.list_local_agent_configs(str(session_uuid))
     assert len(listed_configs) == 2
     assert listed_configs[0].name == "Local2" 
     assert listed_configs[1].name == "Local1"
 
 @pytest.mark.asyncio
 async def test_list_local_configs_no_agents_dir(handler: AgentConfigHandler, tmp_path: Path):
-    session_id = "session_no_agents_dir_ach"
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True) 
-    local_agents_dir = tmp_path / "sessions_root_for_ach" / session_id / LOCAL_AGENTS_DIR_NAME
+    session_uuid = uuid.uuid4()
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
+    
+    local_agents_dir = mocked_session_handler_for_ach_tests.get_local_agent_configs_path.return_value
     if await asyncio.to_thread(local_agents_dir.exists):
-        await asyncio.to_thread(shutil.rmtree, local_agents_dir) # shutil was missing
+        await asyncio.to_thread(shutil.rmtree, local_agents_dir)
     
-    mocked_session_handler_for_ach_tests.get_session.return_value = WorkSession(session_id=session_id, name="s",created_at="n",last_accessed="n")
+    # get_session_metadata should indicate session exists for this test path
+    metadata = SessionMetadata(id=session_uuid, name="s",created_at=datetime.datetime.now(datetime.timezone.utc),updated_at=datetime.datetime.now(datetime.timezone.utc))
+    mocked_session_handler_for_ach_tests.get_session_metadata.return_value = metadata
     
-    listed_configs = await handler.list_local_agent_configs(session_id)
+    listed_configs = await handler.list_local_agent_configs(str(session_uuid))
     assert listed_configs == []
 
 @pytest.mark.asyncio
 async def test_delete_local_agent_config(handler: AgentConfigHandler, tmp_path: Path):
-    session_id = "session_for_delete_ach"
+    session_uuid = uuid.uuid4()
     agent_id = str(uuid.uuid4())
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
     
     config_data = AgentConfig(agent_id=agent_id, name="LocalToDelete", agent_type="CodeAgent", llm_model_id="llm-del")
-    await handler.save_local_agent_config(session_id, config_data)
+    await handler.save_local_agent_config(str(session_uuid), config_data)
     
-    expected_file = tmp_path / "sessions_root_for_ach" / session_id / LOCAL_AGENTS_DIR_NAME / f"{agent_id}.json"
+    expected_local_agents_dir = mocked_session_handler_for_ach_tests.get_local_agent_configs_path.return_value
+    expected_file = expected_local_agents_dir / f"{agent_id}.json"
     assert await asyncio.to_thread(expected_file.exists)
 
-    assert await handler.delete_local_agent_config(session_id, agent_id) is True
+    assert await handler.delete_local_agent_config(str(session_uuid), agent_id) is True
     assert not await asyncio.to_thread(expected_file.exists)
-    assert await handler.get_local_agent_config(session_id, agent_id) is None
+    assert await handler.get_local_agent_config(str(session_uuid), agent_id) is None
 
 @pytest.mark.asyncio
 async def test_get_effective_agent_config_global_only(handler: AgentConfigHandler, tmp_path: Path):
@@ -248,65 +277,58 @@ async def test_get_effective_agent_config_global_only(handler: AgentConfigHandle
     global_config = AgentConfig(agent_id=global_agent_id, name="EffectiveGlobal", agent_type="CodeAgent", llm_model_id="g-llm")
     await handler.save_global_agent_config(global_config)
     
-    mocked_session_handler_for_ach_tests.get_session.return_value = None 
+    mocked_session_handler_for_ach_tests.get_session_metadata.return_value = None # No local session
     retrieved = await handler.get_effective_agent_config(global_agent_id)
     assert retrieved is not None; assert retrieved.name == "EffectiveGlobal"
-
-    session_id = "session_for_effective_global_ach"
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
-    with mock.patch.object(handler, 'get_local_agent_config', AsyncMock(return_value=None)) as mock_get_local:
-        retrieved_with_session = await handler.get_effective_agent_config(global_agent_id, session_id=session_id)
-        mock_get_local.assert_called_once_with(session_id, global_agent_id)
-    assert retrieved_with_session is not None
-    assert retrieved_with_session.name == "EffectiveGlobal"
+    
+    session_uuid = uuid.uuid4() # A session that exists but has no local config for this agent
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
+    # Ensure get_local_agent_config returns None for this specific combo
+    # The mock_session_paths_for_ach_tests will set up get_session_metadata to return a session.
+    # We need to ensure that get_local_agent_config (which internally calls _read_agent_config_file)
+    # returns None because the file won't exist.
+    # This is implicitly tested if the global one is picked up.
+    
+    retrieved_with_session = await handler.get_effective_agent_config(global_agent_id, str(session_uuid))
+    assert retrieved_with_session is not None; assert retrieved_with_session.name == "EffectiveGlobal"
 
 @pytest.mark.asyncio
 async def test_get_effective_agent_config_local_overrides_global(handler: AgentConfigHandler, tmp_path: Path):
-    agent_id = str(uuid.uuid4()) 
-    session_id = "session_for_override_ach"
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
-    
-    global_config = AgentConfig(agent_id=agent_id, name="GlobalOriginal", agent_type="CodeAgent", llm_model_id="g-llm")
-    await handler.save_global_agent_config(global_config)
-    
-    local_config_obj = AgentConfig(agent_id=agent_id, name="LocalOverride", agent_type="ToolAgent", llm_model_id="l-llm")
-    
-    with mock.patch.object(handler, 'get_local_agent_config', AsyncMock(return_value=local_config_obj)) as mock_get_local:
-        retrieved = await handler.get_effective_agent_config(agent_id, session_id=session_id)
-        mock_get_local.assert_called_once_with(session_id, agent_id)
-    assert retrieved is not None
-    assert retrieved.name == "LocalOverride"
+    agent_id = str(uuid.uuid4())
+    session_uuid = uuid.uuid4()
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
 
-    with mock.patch.object(handler, 'get_local_agent_config', AsyncMock(return_value=None)) as mock_get_local_none:
-        retrieved_global_again = await handler.get_effective_agent_config(agent_id) 
-        mock_get_local_none.assert_not_called() 
-    assert retrieved_global_again is not None
-    assert retrieved_global_again.name == "GlobalOriginal"
+    global_config = AgentConfig(agent_id=agent_id, name="GlobalNameToOverride", agent_type="CodeAgent", llm_model_id="g-llm")
+    await handler.save_global_agent_config(global_config)
+
+    local_config = AgentConfig(agent_id=agent_id, name="LocalOverrides", agent_type="CodeAgent", llm_model_id="l-llm")
+    await handler.save_local_agent_config(str(session_uuid), local_config)
+
+    retrieved = await handler.get_effective_agent_config(agent_id, str(session_uuid))
+    assert retrieved is not None
+    assert retrieved.name == "LocalOverrides"
+    assert retrieved.llm_model_id == "l-llm"
 
 @pytest.mark.asyncio
 async def test_get_effective_agent_config_local_only(handler: AgentConfigHandler, tmp_path: Path):
     agent_id = str(uuid.uuid4())
-    session_id = "session_for_local_only_ach"
-    mock_session_paths_for_ach_tests(session_id, tmp_path, session_exists=True)
-    
-    local_config_obj = AgentConfig(agent_id=agent_id, name="OnlyLocal", agent_type="ToolAgent", llm_model_id="l-llm")
-    
-    with mock.patch.object(handler, 'get_local_agent_config', new_callable=AsyncMock) as mock_get_local, \
-         mock.patch.object(handler, 'get_global_agent_config', new_callable=AsyncMock) as mock_get_global:
-        mock_get_local.return_value = local_config_obj
-        
-        retrieved = await handler.get_effective_agent_config(agent_id, session_id=session_id)
-        mock_get_local.assert_called_once_with(session_id, agent_id)
-        mock_get_global.assert_not_called() 
-        assert retrieved is not None
-        assert retrieved.name == "OnlyLocal"
-        
-        mock_get_local.reset_mock(); mock_get_local.return_value = None 
-        mock_get_global.reset_mock(); mock_get_global.return_value = None 
-        retrieved_global = await handler.get_effective_agent_config(agent_id) 
-        mock_get_local.assert_not_called() 
-        mock_get_global.assert_called_once_with(agent_id)
-        assert retrieved_global is None
+    session_uuid = uuid.uuid4()
+    mock_session_paths_for_ach_tests(session_uuid, tmp_path, session_exists=True)
+
+    # Ensure no global config for this agent_id
+    await handler.delete_global_agent_config(agent_id) # delete if it exists from a previous failed run
+
+    local_config = AgentConfig(agent_id=agent_id, name="EffectiveLocalOnly", agent_type="CodeAgent", llm_model_id="l-llm-only")
+    await handler.save_local_agent_config(str(session_uuid), local_config)
+
+    retrieved = await handler.get_effective_agent_config(agent_id, str(session_uuid))
+    assert retrieved is not None
+    assert retrieved.name == "EffectiveLocalOnly"
+
+    # Test case where session_id is None but local config exists (should not happen with current ACH logic, but good to be robust)
+    # This will effectively try to get global, which doesn't exist.
+    retrieved_no_session = await handler.get_effective_agent_config(agent_id) 
+    assert retrieved_no_session is None # Expect None as no global config exists
 
 
 @pytest.mark.asyncio
@@ -317,11 +339,11 @@ async def test_list_empty_global_configs(handler: AgentConfigHandler, tmp_path: 
 
 @pytest.mark.asyncio
 async def test_delete_non_existent_global_config(handler: AgentConfigHandler): 
-    assert await handler.delete_global_agent_config(str(uuid.uuid4())) is True
+    assert await handler.delete_global_agent_config(str(uuid.uuid4())) is False
 
 @pytest.mark.asyncio
 async def test_invalid_agent_id_operations(handler: AgentConfigHandler): 
-    invalid_ids = ["../escape", "path/slash", "path\\slash", ""]
+    invalid_ids = [r"../escape", r"path/slash", r"path\\slash", r""]
     for invalid_id in invalid_ids:
         with pytest.raises(ValueError, match="Invalid agent_id format"):
             await handler.save_global_agent_config(AgentConfig(agent_id=invalid_id, name="x", agent_type="y", llm_model_id="z"))

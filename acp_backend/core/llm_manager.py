@@ -1,230 +1,205 @@
 # acp_backend/core/llm_manager.py
 import logging
-from typing import List, Optional, AsyncGenerator, TypeVar
+import os
 from pathlib import Path
+from typing import Optional, List, Dict, Any, Type, AsyncGenerator
 import asyncio
+from collections import defaultdict
 
-# Import the class for type hinting, but conditionally use the passed instance
-from acp_backend.config import Settings as SettingsClass
-from acp_backend.config import settings as global_settings_instance # Fallback
+from acp_backend.config import AppSettings # Assuming this is correctly imported
 
 from acp_backend.models.llm_models import (
-    LLMModelInfo, LoadModelRequest, ChatCompletionRequest,
-    ChatCompletionResponse, ChatCompletionChunk, ChatMessageInput,
-    ChatCompletionResponseChoice, ChatCompletionChunkChoice, ChatCompletionChunkDelta,
-    UsageInfo
+    LLM,
+    LLMConfig,
+    LLMChatMessage,
+    LLMChatCompletion, # Using the canonical name
+    LLMModelType,
+    LLMStatus,
 )
-from acp_backend.llm_backends.base import LLMBackend
-# Import specific backends as needed
+from acp_backend.llm_backends.base import LLMBackendInterface
 from acp_backend.llm_backends.llama_cpp import LlamaCppBackend
-# from acp_backend.llm_backends.pie import PIEBackend # If PIEBackend is implemented
+# from acp_backend.llm_backends.pie import PIEBackend # If you implement this
 
 logger = logging.getLogger(__name__)
 
-TSettings = TypeVar('TSettings', bound=SettingsClass)
+# Mapping of backend type strings to backend classes
+BACKEND_CLASSES: Dict[LLMModelType, Type[LLMBackendInterface]] = {
+    LLMModelType.LLAMA_CPP: LlamaCppBackend,
+    # LLMModelType.PIE: PIEBackend,
+}
 
 class LLMManager:
-    _loaded_models: dict[str, LLMBackend] = {} 
-
-    def __init__(self, settings_override: Optional[TSettings] = None):
-        current_settings = settings_override if settings_override else global_settings_instance
-        self.settings = current_settings # Store the settings instance used
+    def __init__(
+        self,
+        models_dir: str | Path,
+        default_backend_type: LLMModelType | str,
+        # app_settings_instance: AppSettings # Optionally pass full settings if needed by backends
+    ):
+        self.models_dir = Path(models_dir)
+        self.models_dir.mkdir(parents=True, exist_ok=True)
         
-        self.default_backend_type = self.settings.LLM_BACKEND_TYPE 
-        logger.info(f"LLMManager initialized with default backend: {self.default_backend_type} using settings ID: {id(self.settings)}")
+        if isinstance(default_backend_type, str):
+            try:
+                self.default_backend_type = LLMModelType(default_backend_type.lower())
+            except ValueError:
+                logger.error(f"Invalid default_backend_type string: {default_backend_type}. Falling back to {LLMModelType.LLAMA_CPP.value}.")
+                self.default_backend_type = LLMModelType.LLAMA_CPP
+        else:
+            self.default_backend_type = default_backend_type
 
-    async def discover_models(self, models_dir: Optional[Path] = None) -> List[LLMModelInfo]:
-        # Use internal settings for models_dir if not provided
-        effective_models_dir = models_dir if models_dir is not None else self.settings.MODELS_DIR
-        logger.debug(f"Discovering models in {effective_models_dir}")
+        # self.app_settings = app_settings_instance # Store if needed
+
+        self.loaded_models: Dict[str, LLM] = {} # Stores LLM Pydantic model (config & status)
+        self._live_backends: Dict[str, LLMBackendInterface] = {} # Stores live backend instances
+        self._model_locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock) # Added for per-model locking
+
+        logger.info(
+            f"LLMManager initialized. Models directory: {self.models_dir}. "
+            f"Default backend: {self.default_backend_type.value}"
+        )
+
+    def _get_backend_class(self, backend_type: Optional[LLMModelType]) -> Type[LLMBackendInterface]:
+        effective_backend_type = backend_type or self.default_backend_type
+        backend_class = BACKEND_CLASSES.get(effective_backend_type)
+        if not backend_class:
+            logger.error(
+                f"Unsupported LLM backend type: {effective_backend_type}. "
+                f"Falling back to {self.default_backend_type.value} if available."
+            )
+            if effective_backend_type != self.default_backend_type:
+                backend_class = BACKEND_CLASSES.get(self.default_backend_type)
+            if not backend_class:
+                raise ValueError(f"No backend class configured for '{effective_backend_type.value}' or default type.")
+        return backend_class
+
+    def discover_models(self, backend_filter: Optional[LLMModelType | str] = None) -> List[LLMConfig]:
+        logger.info(f"Discovering models (currently mocked). Backend filter: {backend_filter}")
+        mock_configs = [
+            LLMConfig(
+                model_id="mock-model-llama-cpp",
+                model_name="Mock Llama Cpp Model",
+                model_path="mock-model.gguf", # Path relative to models_dir for local backends
+                backend_type=LLMModelType.LLAMA_CPP,
+                parameters={"n_ctx": 2048, "n_gpu_layers": 0}
+            ),
+        ]
+        if backend_filter:
+            filter_val = LLMModelType(str(backend_filter).lower()) if isinstance(backend_filter, str) else backend_filter
+            return [config for config in mock_configs if config.backend_type == filter_val]
+        return mock_configs
+
+    async def load_model(self, model_config: LLMConfig) -> LLM:
+        model_id = model_config.model_id
+        async with self._model_locks[model_id]: # Acquire lock for this model_id
+            if model_id in self.loaded_models and self.loaded_models[model_id].status == LLMStatus.LOADED:
+                logger.info(f"Model '{model_id}' already loaded.")
+                return self.loaded_models[model_id]
+
+            logger.info(f"Loading model '{model_id}' ({model_config.model_name}) "
+                        f"using backend: {model_config.backend_type.value}")
         
-        found_models_info: List[LLMModelInfo] = []
-        
-        # Add already loaded models
-        for model_id, backend_instance in self._loaded_models.items():
-            info = backend_instance.get_model_info()
-            if info:
-                found_models_info.append(info)
-
-        # Scan LlamaCpp models (.gguf files)
-        if await asyncio.to_thread(effective_models_dir.exists):
-            for file_path in await asyncio.to_thread(list, effective_models_dir.glob("*.gguf")):
-                model_id = file_path.stem
-                if model_id not in self._loaded_models: # Only add if not already loaded
-                    try:
-                        size_bytes = await asyncio.to_thread(file_path.stat).st_size
-                        size_gb = round(size_bytes / (1024**3), 2) if size_bytes else None
-                        # Basic info for discoverable, unloaded GGUF model
-                        found_models_info.append(LLMModelInfo(
-                            id=model_id,
-                            name=model_id, # Or derive a more friendly name
-                            path=str(file_path.resolve()),
-                            size_gb=size_gb,
-                            loaded=False,
-                            backend="llama_cpp" # Assuming GGUF is for llama_cpp
-                            # Other fields like quantization might need deeper inspection or naming conventions
-                        ))
-                    except Exception as e:
-                        logger.warning(f"Could not get info for GGUF file {file_path}: {e}")
-        
-        # Placeholder for PIEBackend discovery if it were implemented
-        # if self.default_backend_type == "pie" or "pie" in other_enabled_backends:
-        #     # pie_models = await PIEBackend.discover_models() # Static method on PIEBackend
-        #     # found_models_info.extend(pie_models)
-        #     pass
-
-        # Remove duplicates by id, prioritizing loaded models if any conflict
-        final_models_dict: Dict[str, LLMModelInfo] = {}
-        for model_info in found_models_info:
-            if model_info.id not in final_models_dict or model_info.loaded:
-                final_models_dict[model_info.id] = model_info
-        
-        return list(final_models_dict.values())
-
-
-    async def get_loaded_models(self) -> List[LLMModelInfo]:
-        return [model.get_model_info() for model in self._loaded_models.values() if model.get_model_info()]
-
-    async def get_model_details(self, model_id: str) -> Optional[LLMModelInfo]:
-        if model_id in self._loaded_models:
-            return self._loaded_models[model_id].get_model_info()
-        
-        # If not loaded, try to find it in discoverable models (e.g., from file system scan)
-        # This requires discover_models to be comprehensive or called implicitly.
-        # For simplicity, we can call discover_models here if not found in loaded.
-        discoverable_models = await self.discover_models() # Uses self.settings.MODELS_DIR
-        for model_info in discoverable_models:
-            if model_info.id == model_id:
-                return model_info # This will have loaded=False if not in _loaded_models
-        return None
-
-    async def load_model(self, request: LoadModelRequest) -> LLMModelInfo:
-        model_id_to_load = request.model_id or (Path(request.model_path).stem if request.model_path else None)
-        if not model_id_to_load:
-            raise ValueError("Either model_id or model_path must be provided to load a model.")
-
-        if model_id_to_load in self._loaded_models:
-            # Consider just returning the info if already loaded, or raise specific error
-            logger.warning(f"Model '{model_id_to_load}' is already loaded. Returning existing info.")
-            existing_info = self._loaded_models[model_id_to_load].get_model_info()
-            if not existing_info: # Should not happen if it's in _loaded_models
-                 raise RuntimeError(f"Model '{model_id_to_load}' in loaded_models dict but get_model_info() failed.")
-            return existing_info
-
-
-        logger.info(f"Attempting to load model: {model_id_to_load} with backend {self.default_backend_type}")
-
-        backend_instance: Optional[LLMBackend] = None
-
-        if self.default_backend_type == "llama_cpp":
-            model_path_str = request.model_path
-            if not model_path_str:
-                # Fallback to settings only if request.model_id was also not enough to find a path
-                # This logic might need refinement: discover first, then load by path.
-                # For now, if model_path is not given, we assume request.model_id might be a discoverable ID
-                # that implies a path, or we use the global default path.
-                
-                # Attempt to find path from discovered models if only model_id was given
-                if request.model_id and not request.model_path:
-                    discovered = await self.get_model_details(request.model_id) # Check if it's discoverable
-                    if discovered and discovered.path:
-                        model_path_str = discovered.path
-                    elif self.settings.LLAMA_CPP_MODEL_PATH: # Fallback to global default
-                         model_path_str = self.settings.LLAMA_CPP_MODEL_PATH
-                    else:
-                        raise ValueError(f"Model path not found for '{model_id_to_load}'. Provide 'model_path' or ensure model is discoverable or set LLAMA_CPP_MODEL_PATH.")
-                elif self.settings.LLAMA_CPP_MODEL_PATH: # Fallback to global default if no model_id or path
-                    model_path_str = self.settings.LLAMA_CPP_MODEL_PATH
-                else:
-                     raise ValueError("llama-cpp backend requires 'model_path' in request or LLAMA_CPP_MODEL_PATH in settings.")
-
-
-            model_path_obj = Path(model_path_str)
-            if not await asyncio.to_thread(model_path_obj.exists):
-                raise FileNotFoundError(f"Model file not found at {model_path_obj}")
+            # Store metadata immediately with loading status
+            llm_meta = LLM(config=model_config, status=LLMStatus.LOADING)
+            self.loaded_models[model_id] = llm_meta
 
             try:
-                backend_instance = LlamaCppBackend(
-                    model_path=model_path_obj,
-                    n_gpu_layers=request.n_gpu_layers if request.n_gpu_layers is not None else self.settings.LLAMA_CPP_N_GPU_LAYERS,
-                    n_ctx=request.n_ctx if request.n_ctx is not None else self.settings.LLAMA_CPP_N_CTX,
-                    n_batch=request.n_batch if request.n_batch is not None else self.settings.LLAMA_CPP_N_BATCH,
-                    chat_format=request.chat_format or self.settings.LLAMA_CPP_CHAT_FORMAT,
-                    verbose=self.settings.LLAMA_CPP_VERBOSE
-                )
-            except Exception as e: # Catch specific errors from LlamaCppBackend if possible
-                logger.error(f"Failed to initialize LlamaCppBackend for model '{model_id_to_load}': {e}", exc_info=True)
-                raise RuntimeError(f"Failed to initialize LlamaCppBackend for model '{model_id_to_load}': {e}")
+                BackendClass = self._get_backend_class(model_config.backend_type)
+                
+                actual_model_path = model_config.model_path
+                # For local file-based backends, resolve path relative to models_dir if not absolute
+                if model_config.backend_type == LLMModelType.LLAMA_CPP: # Add other local types if any
+                    if not Path(actual_model_path).is_absolute():
+                        actual_model_path = str(self.models_dir / model_config.model_path)
+                
+                # Create and load the backend instance
+                # Pass AppSettings if specific backend initializers need more global config
+                # backend_instance = BackendClass(model_path=actual_model_path, config_params=model_config.parameters, app_settings=self.app_settings)
+                backend_instance = BackendClass(model_path=actual_model_path, config_params=model_config.parameters)
+                await backend_instance.load() 
+
+                self._live_backends[model_id] = backend_instance # Store live backend
+                llm_meta.status = LLMStatus.LOADED
+                logger.info(f"Successfully loaded model '{model_id}'.")
+                return llm_meta
+            except Exception as e:
+                logger.error(f"Failed to load model '{model_id}': {e}", exc_info=True)
+                llm_meta.status = LLMStatus.ERROR
+                llm_meta.error_message = str(e)
+                if model_id in self._live_backends: # Cleanup if backend was partially stored
+                    del self._live_backends[model_id]
+                raise # Re-raise to allow caller to handle
+
+    async def unload_model(self, model_id: str) -> bool:
+        async with self._model_locks[model_id]: # Acquire lock for this model_id
+            if model_id not in self.loaded_models:
+                logger.warning(f"Model '{model_id}' not found in metadata. Cannot unload.")
+                return False
         
-        # Placeholder for PIEBackend
-        # elif self.default_backend_type == "pie":
-        #     if not request.model_id: # PIE might use IDs more than paths
-        #         raise ValueError("PIE backend requires 'model_id'.")
-        #     backend_instance = PIEBackend(model_id=request.model_id, settings=self.settings) # Pass settings if needed
+            llm_meta = self.loaded_models[model_id]
+            llm_meta.status = LLMStatus.UNLOADING
 
-        else:
-            raise ValueError(f"Unsupported LLM backend type: {self.default_backend_type}")
+            try:
+                logger.info(f"Unloading model '{model_id}'...")
+                backend_instance = self._live_backends.pop(model_id, None)
+                if backend_instance and hasattr(backend_instance, 'unload'):
+                    await backend_instance.unload() # Assuming an async unload method
+                
+                del self.loaded_models[model_id]
+                import gc
+                gc.collect() # Hint for garbage collection
+                logger.info(f"Successfully unloaded model '{model_id}'.")
+                return True
+            except Exception as e:
+                logger.error(f"Error unloading model '{model_id}': {e}", exc_info=True)
+                llm_meta.status = LLMStatus.ERROR # Mark as error if unload fails
+                llm_meta.error_message = f"Failed to unload: {str(e)}"
+                # Do not re-add to _live_backends if pop failed or unload errored
+                return False
 
-        if backend_instance:
-            self._loaded_models[model_id_to_load] = backend_instance
-            model_info = backend_instance.get_model_info()
-            if not model_info: # Should not happen
-                logger.error(f"Backend for '{model_id_to_load}' failed to provide model info after load.")
-                # Clean up if info is missing
-                self._loaded_models.pop(model_id_to_load, None)
-                backend_instance.release()
-                raise RuntimeError(f"Backend for '{model_id_to_load}' failed to provide model info after load.")
-            
-            logger.info(f"Model '{model_id_to_load}' loaded successfully with backend {type(backend_instance).__name__}.")
-            return model_info
-        else: # Should have been caught by backend type check, but as a safeguard
-            raise RuntimeError(f"Could not create backend instance for model '{model_id_to_load}'.")
+    def get_loaded_models_meta(self) -> List[LLM]: # Returns list of LLM Pydantic models
+        return list(self.loaded_models.values())
 
+    def get_llm_meta(self, model_id: str) -> Optional[LLM]:
+        return self.loaded_models.get(model_id)
 
-    async def unload_model(self, model_id: str) -> LLMModelInfo:
-        if model_id not in self._loaded_models:
-            # Check if it's a discoverable but not loaded model to return its info
-            details = await self.get_model_details(model_id)
-            if details: # It exists but is not loaded
-                logger.info(f"Model '{model_id}' was not loaded. Returning its current info.")
-                return details
-            raise ValueError(f"Model '{model_id}' not found or not loaded.")
+    def _get_live_backend(self, model_id: str) -> Optional[LLMBackendInterface]:
+        llm_meta = self.get_llm_meta(model_id)
+        if not llm_meta or llm_meta.status != LLMStatus.LOADED:
+            logger.error(f"Cannot get live backend for model '{model_id}'. Status: {llm_meta.status if llm_meta else 'Not Found'}")
+            return None
         
-        backend = self._loaded_models.pop(model_id)
-        original_info = backend.get_model_info() # Get info before releasing
+        backend_instance = self._live_backends.get(model_id)
+        if not backend_instance:
+            logger.error(f"Live backend instance for model '{model_id}' not found, though metadata status is LOADED. This indicates an internal inconsistency.")
+            # Potentially try to reload or mark as error
+            llm_meta.status = LLMStatus.ERROR
+            llm_meta.error_message = "Internal error: Live backend instance missing."
+            return None
+        return backend_instance
+
+    async def chat_completion(
+        self, model_id: str, messages: List[LLMChatMessage], stream: bool = False, **kwargs
+    ) -> LLMChatCompletion | AsyncGenerator[LLMChatCompletion, None]:
         
-        try:
-            await asyncio.to_thread(backend.release) # Assuming release can be blocking
-        except Exception as e:
-            logger.error(f"Error during release of model '{model_id}': {e}", exc_info=True)
-            # Even if release fails, it's removed from loaded_models. What to return?
-            # Fallback to original_info but mark as not loaded.
-            if original_info:
-                original_info.loaded = False
-                return original_info
-            # If original_info was None, construct a basic one
-            return LLMModelInfo(id=model_id, name=model_id, backend=self.default_backend_type, loaded=False, path=str(getattr(backend, '_model_path', 'N/A')))
+        backend_instance = self._get_live_backend(model_id)
+        if not backend_instance:
+            raise ValueError(f"Model '{model_id}' is not loaded or backend instance is unavailable.")
 
-
-        logger.info(f"Model '{model_id}' unloaded successfully.")
-        if original_info:
-            original_info.loaded = False
-            return original_info
-        # Fallback if get_model_info somehow failed before release but model was popped
-        return LLMModelInfo(id=model_id, name=model_id, backend=self.default_backend_type, loaded=False, path=str(getattr(backend, '_model_path', 'N/A')))
-
-
-    async def process_chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
-        backend = self._loaded_models.get(request.model_id)
-        if not backend:
-            raise ValueError(f"Model '{request.model_id}' is not loaded.")
+        llm_meta = self.get_llm_meta(model_id) # Should exist if backend_instance was found
         
-        return await backend.chat_completion(request)
-
-    async def stream_process_chat_completion(self, request: ChatCompletionRequest) -> AsyncGenerator[ChatCompletionChunk, None]:
-        backend = self._loaded_models.get(request.model_id)
-        if not backend:
-            raise ValueError(f"Model '{request.model_id}' is not loaded.")
+        logger.debug(f"Performing chat completion with model '{model_id}'. Stream: {stream}. Kwargs: {kwargs}")
         
-        async for chunk in backend.stream_chat_completion(request):
-            yield chunk
+        # Pass the model_id from the config to be included in the response object
+        return await backend_instance.chat_completion(
+            messages, 
+            stream=stream, 
+            model_id_for_response=llm_meta.config.model_id, 
+            **kwargs
+        )
+
+    async def unload_all_models(self):
+        logger.info("Unloading all loaded models...")
+        model_ids_to_unload = list(self.loaded_models.keys()) # Iterate over a copy of keys
+        for model_id in model_ids_to_unload:
+            await self.unload_model(model_id)
+        logger.info("All models have been requested to unload.")

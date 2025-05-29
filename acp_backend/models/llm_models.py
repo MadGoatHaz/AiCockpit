@@ -1,95 +1,119 @@
 # acp_backend/models/llm_models.py
-from pydantic import BaseModel, Field, ConfigDict 
-from typing import List, Optional, Dict, Any, Union, Literal
-import time 
-import uuid 
+import uuid
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Optional, List, Dict, Any, Literal
 
-class LLMModelInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+from pydantic import BaseModel, Field
 
-    id: str = Field(..., description="Unique identifier for the model.")
-    name: str = Field(..., description="Display name of the model.")
-    path: Optional[str] = Field(None, description="Filesystem path to the model file, if applicable.")
-    size_gb: Optional[float] = Field(None, ge=0, description="Size of the model file in GB. Must be non-negative if set.")
-    quantization: Optional[str] = Field(None, description="Quantization type (e.g., 'Q4_K_M', 'F16').")
-    loaded: bool = Field(False, description="Indicates if the model is currently loaded in memory.")
-    backend: str = Field(..., description="Identifier of the backend managing this model.")
-    architecture: Optional[str] = Field(None, description="Model architecture (e.g., 'Llama', 'Mistral').")
-    context_length: Optional[int] = Field(None, gt=0, description="Maximum context length. Must be positive if set.")
-    parameters: Optional[str] = Field(None, description="Number of parameters (e.g., '7B', '70B').")
+# --- Enums ---
+class LLMModelType(Enum):
+    LLAMA_CPP = "llama_cpp"
+    PIE = "pie"
+    MOCK = "mock"
 
-class LoadModelRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+class MessageRole(Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
 
-    model_id: Optional[str] = Field(None, description="ID of a previously discovered model to load.")
-    model_path: Optional[str] = Field(None, description="Path to the GGUF model file.")
-    n_gpu_layers: Optional[int] = Field(None, ge=-1, description="Layers to offload to GPU (-1 for all). Llama.cpp specific.")
-    n_ctx: Optional[int] = Field(None, gt=0, description="Context size override. Must be positive. Llama.cpp specific.")
-    n_batch: Optional[int] = Field(None, gt=0, description="Batch size for prompt processing. Must be positive. Llama.cpp specific.")
-    chat_format: Optional[str] = Field(None, description="Chat format string (e.g., 'llama-2'). Llama.cpp specific.")
+class LLMStatus(Enum):
+    UNKNOWN = "unknown"
+    DISCOVERED = "discovered"
+    LOADING = "loading"
+    LOADED = "loaded"
+    UNLOADING = "unloading"
+    UNLOADED = "unloaded"
+    ERROR = "error"
 
-class ChatMessageInput(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+# --- LLM Configuration and Data Models ---
+class LLMConfig(BaseModel):
+    model_id: str = Field(..., description="Unique identifier for this model configuration")
+    model_name: str = Field(..., description="User-friendly display name for the model")
+    model_path: str = Field(..., description="Path to model file or endpoint URL")
+    backend_type: LLMModelType = Field(..., description="Backend type for this model")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Backend-specific parameters")
 
-    role: Literal["system", "user", "assistant"] = Field(..., description="Role of the message sender.")
-    content: str = Field(..., description="Content of the message.")
+class LLM(BaseModel):
+    config: LLMConfig
+    status: LLMStatus = Field(default=LLMStatus.UNKNOWN, description="Current status of the LLM")
+    error_message: Optional[str] = Field(None, description="Error message if status is ERROR")
 
-class UsageInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+class LLMChatMessage(BaseModel):
+    role: MessageRole
+    content: str
+    name: Optional[str] = None
 
+class LLMChatChoice(BaseModel):
+    index: int
+    message: LLMChatMessage
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter", "function_call"]] = None
+
+class LLMUsage(BaseModel):
     prompt_tokens: int = Field(..., ge=0)
     completion_tokens: Optional[int] = Field(None, ge=0)
     total_tokens: int = Field(..., ge=0)
 
-class ChatCompletionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+# Canonical name for chat completion objects
+class LLMChatCompletion(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex}")
+    object: str = Field(default="chat.completion")
+    created: int = Field(default_factory=lambda: int(datetime.now(timezone.utc).timestamp()))
+    model: str
+    choices: List[LLMChatChoice]
+    usage: Optional[LLMUsage] = None
+    system_fingerprint: Optional[str] = None
 
-    model_id: str = Field(..., description="ID of the loaded LLM model to use.")
-    messages: List[ChatMessageInput] = Field(..., min_length=1, description="Conversation history.")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Controls randomness.")
-    max_tokens: Optional[int] = Field(512, gt=0, description="Max tokens to generate. Must be positive if set.")
-    stream: bool = Field(False, description="If True, stream response via SSE.")
-    stop: Optional[Union[str, List[str]]] = Field(None, description="Stop sequence(s).")
-    top_p: Optional[float] = Field(None, ge=0.0, le=1.0, description="Nucleus sampling cutoff.")
-    top_k: Optional[int] = Field(None, ge=0, description="Consider k most likely tokens.")
-    repeat_penalty: Optional[float] = Field(None, ge=0.0, description="Penalty for repeating tokens (1.0 is neutral).")
-    grammar: Optional[str] = Field(None, description="GBNF grammar string (Llama.cpp specific).")
+# --- API Request Models ---
+class LoadLLMRequest(BaseModel): # Kept simplified
+    model_id: Optional[str] = Field(None, description="ID of a pre-discovered model config to load.")
+    # model_config: Optional[LLMConfig] = Field(None, description="Full configuration for a model to load.") # Still commented
 
-class ChatCompletionResponseChoice(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+class UnloadLLMRequest(BaseModel):
+    model_id: str
 
-    index: int = Field(0, ge=0)
-    message: ChatMessageInput 
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter", "function_call", "error"]] = Field(None, description="Reason generation stopped.")
+class ChatCompletionRequest(BaseModel): # For the API request body
+    model_id: str
+    messages: List[LLMChatMessage] = Field(..., min_length=1)
+    stream: bool = False
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(None, gt=0)
 
-class ChatCompletionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+# --- API Response Models ---
+class DiscoveredLLMConfigResponse(BaseModel):
+    configs: List[LLMConfig]
 
-    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4()}", description="Unique completion ID.")
-    object: Literal["chat.completion"] = Field("chat.completion", description="Object type.")
-    created: int = Field(default_factory=lambda: int(time.time()), description="Unix timestamp of creation.")
-    model: str = Field(..., description="ID of the model used.")
-    choices: List[ChatCompletionResponseChoice] = Field(..., min_length=1)
-    usage: Optional[UsageInfo] = None
+class LLMModelInfo(BaseModel):
+    model_id: str
+    model_name: str
+    backend_type: LLMModelType
+    status: LLMStatus
+    parameters: Dict[str, Any]
 
-class ChatCompletionChunkDelta(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+class LoadedLLMsResponse(BaseModel):
+    loaded_models: List[LLMModelInfo]
 
-    role: Optional[Literal["system", "user", "assistant"]] = None
-    content: Optional[str] = None 
+# --- Streaming Specific Models (added based on test_llm_models.py) ---
 
-class ChatCompletionChunkChoice(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
+class LLMChatCompletionChunkDelta(BaseModel):
+    content: Optional[str] = None
+    role: Optional[MessageRole] = None # Role might appear in the first chunk for some models
+    # According to OpenAI spec, tool_calls can also be part of delta.
+    # tool_calls: Optional[List[Any]] = None # Placeholder if you add tool usage
+    name: Optional[str] = None # If role is tool, name of the tool
 
-    index: int = Field(0, ge=0)
-    delta: ChatCompletionChunkDelta
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter", "function_call", "error"]] = Field(None, description="Reason generation stopped (final chunk).")
+class LLMChatCompletionChunkChoice(BaseModel):
+    index: int
+    delta: LLMChatCompletionChunkDelta
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter"]] = None
+    # logprobs: Optional[Any] = None # If you support log probabilities
 
-class ChatCompletionChunk(BaseModel):
-    model_config = ConfigDict(extra="forbid") 
-
-    id: str = Field(..., description="ID of the overall stream.")
-    object: Literal["chat.completion.chunk"] = Field("chat.completion.chunk", description="Object type.")
-    created: int = Field(..., description="Timestamp of creation.")
-    model: str = Field(..., description="ID of the model used.")
-    choices: List[ChatCompletionChunkChoice] 
+class LLMChatCompletionChunk(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl.chunk-{uuid.uuid4().hex}")
+    object: str = Field(default="chat.completion.chunk")
+    created: int = Field(default_factory=lambda: int(datetime.now(timezone.utc).timestamp()))
+    model: str # Model identifier
+    choices: List[LLMChatCompletionChunkChoice]
+    system_fingerprint: Optional[str] = None # Matches LLMChatCompletion
+    # usage: Optional[LLMUsage] = None # Usage typically sent with the last chunk or not at all for chunks

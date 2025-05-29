@@ -38,7 +38,7 @@ def fsm_instance_with_patched_session_handler(module_tmp_sessions_path):
 
     mock_sh._get_session_data_path.side_effect = mock_get_session_data_path
     mock_sh._validate_session_id_format.side_effect = mock_validate_session_id_format
-    mock_sh._get_session_folder_path.side_effect = mock_get_session_folder_path
+    mock_sh._get_session_path.side_effect = mock_get_session_folder_path
     
     # Instantiate FileSystemManager with the mocked SessionHandler
     fsm = FileSystemManager(session_handler_instance=mock_sh)

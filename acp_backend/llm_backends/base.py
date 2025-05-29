@@ -1,41 +1,65 @@
 # acp_backend/llm_backends/base.py
+import logging
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Optional
+from typing import List, AsyncGenerator, Optional, Dict, Any
 
-# Ensure all necessary Pydantic models are imported for type hints
+# Using canonical model names from the definitive llm_models.py
 from acp_backend.models.llm_models import (
-    LLMModelInfo, 
-    ChatCompletionRequest, 
-    ChatCompletionResponse, 
-    ChatCompletionChunk
+    LLMChatMessage,
+    LLMChatCompletion,    # Canonical name for completion object
+    LLMModelInfo,
+    LLMConfig,
+    # LoadLLMRequest,     # Not typically used by the backend interface itself
+    # ChatCompletionRequest # The backend interface takes decomposed args
 )
 
-class LLMBackend(ABC):
-    """Abstract base class for all LLM backends."""
+logger = logging.getLogger(__name__)
+
+class LLMBackendInterface(ABC):
+    """
+    Abstract base class for LLM backend implementations.
+    """
+
+    def __init__(self, model_path: str, config_params: Dict[str, Any]):
+        """
+        Initialize the backend.
+
+        Args:
+            model_path: Path or identifier for the model.
+            config_params: Backend-specific configuration parameters from LLMConfig's 'parameters' field.
+        """
+        self.model_path = model_path
+        self.config_params = config_params
+        logger.info(f"LLMBackendInterface initialized for model path: {model_path} with params: {config_params}")
 
     @abstractmethod
-    def get_model_info(self) -> Optional[LLMModelInfo]: # Changed to Optional[LLMModelInfo] for consistency if info can be None
-        """Returns detailed information about the loaded model."""
+    async def load(self) -> None:
+        """
+        Load the model into memory.
+        Implementations should handle their specific loading logic.
+        This method should make the backend ready for chat_completion calls.
+        """
         pass
 
     @abstractmethod
-    async def chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
-        """Generates a chat completion."""
+    async def unload(self) -> None:
+        """
+        Unload the model from memory and release resources.
+        (Implement if explicit cleanup is needed beyond object deletion)
+        """
         pass
 
     @abstractmethod
-    async def stream_chat_completion(self, request: ChatCompletionRequest) -> AsyncGenerator[ChatCompletionChunk, None]:
-        """Generates a streaming chat completion."""
-        # Ensure the generator yields ChatCompletionChunk or raises an exception
-        # This is an abstract method, so the implementation is in subclasses.
-        # For type hinting and to make it a valid async generator:
-        if False: # pragma: no cover
-            yield # type: ignore 
-
-    
-    def release(self):
+    async def chat_completion(
+        self,
+        messages: List[LLMChatMessage],
+        stream: bool = False,
+        model_id_for_response: Optional[str] = None, # model_id to put in the response object
+        **kwargs: Any, # For backend-specific parameters like temperature, max_tokens, etc.
+    ) -> LLMChatCompletion | AsyncGenerator[LLMChatCompletion, None]:
         """
-        Releases any resources held by the backend (e.g., unload model from GPU).
-        This method should be idempotent.
+        Generate a chat completion.
+        The 'model' field in the returned LLMChatCompletion object should be populated
+        using model_id_for_response or an internally known model ID.
         """
-        pass # Default implementation does nothing
+        pass

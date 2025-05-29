@@ -22,6 +22,17 @@ class AgentConfig(BaseModel):
     tools: List[str] = Field(default_factory=list, description="List of tool IDs available to the agent.")
     max_steps: Optional[int] = Field(None, gt=0, description="Maximum number of steps. Must be positive if set.")
     additional_authorized_imports: List[str] = Field(default_factory=list, description="For CodeAgent: Python modules this agent is allowed to import.")
+    use_e2b_executor: Optional[bool] = Field(None, description="For CodeAgent: Whether to use the E2B secure sandboxed executor.")
+    # Common LLM parameters that can be configured per agent, overriding global LLM settings
+    max_tokens: Optional[int] = Field(None, description="Max tokens for the LLM. Overrides model's default if set.")
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Temperature for LLM sampling. Overrides model's default if set.")
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0, description="Top_p for LLM sampling. Overrides model's default if set.")
+    top_k: Optional[int] = Field(None, ge=0, description="Top_k for LLM sampling. Overrides model's default if set.")
+    # SmolAgents specific or other useful fields
+    max_retries: Optional[int] = Field(None, ge=0, description="Maximum number of retries for agent actions or LLM calls.")
+    timeout: Optional[int] = Field(None, ge=0, description="Timeout in seconds for agent actions or LLM calls.")
+    cache_responses: Optional[bool] = Field(None, description="Whether the agent should cache LLM responses to avoid redundant calls.")
+    verbose_logging: Optional[bool] = Field(None, description="Enable detailed verbose logging for this agent's execution.")
     created_at: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat(), description="ISO timestamp of creation.")
     updated_at: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat(), description="ISO timestamp of last update.")
 

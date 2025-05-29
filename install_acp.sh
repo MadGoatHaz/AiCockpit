@@ -189,12 +189,12 @@ main() {
     _print_msg "Activating virtual environment..." >&2; source "$VENV_DIR/bin/activate" || { _print_error "Venv activation failed."; exit 1; }; SCRIPT_ACTIVATED_VENV=true
 
     _print_section_header "Step 3: Installing Project Dependencies with PDM"
-    if ! _command_exists pdm; then _print_msg "PDM not found. Installing PDM..." >&2; if ! python -m pip install "pdm>=1.14"; then _print_error "PDM install failed."; exit 1; fi; fi
+    if ! _command_exists pdm; then _print_msg "PDM not found. Installing PDM..." >&2; if ! python3 -m pip install "pdm>=1.14"; then _print_error "PDM install failed."; exit 1; fi; fi
     _print_msg "PDM found: ${BOLD}$(pdm --version)${RESET}"
     LLAMA_CPP_CMAKE_ARGS=""; if [ "$force_reinstall_deps" = true ] || ! pdm list --graph | grep -q "llama-cpp-python"; then LLAMA_CPP_CMAKE_ARGS=$(_detect_gpu_and_set_cmake_args); else _print_info "llama-cpp-python seems installed." >&2; fi
     _print_msg "Installing/updating project dependencies..." >&2; _print_info "This may take time." >&2
-    if ! env CMAKE_ARGS="$LLAMA_CPP_CMAKE_ARGS" pdm install --no-self; then _print_error "PDM install failed (GPU: ${BOLD}$LLAMA_CPP_CMAKE_ARGS${RESET})."
-        if [ -n "$LLAMA_CPP_CMAKE_ARGS" ]; then _print_warning "GPU build failed." >&2; if _prompt_user_yes_no "Attempt ${BOLD}CPU-only${RESET} build?" "Y"; then if ! pdm install --no-self; then _print_error "CPU build failed."; exit 1; fi; else _print_error "Install aborted."; exit 1; fi; else _print_error "Install failed."; exit 1; fi; fi
+    if ! env CMAKE_ARGS="$LLAMA_CPP_CMAKE_ARGS" pdm install -G dev --no-self; then _print_error "PDM install failed (GPU: ${BOLD}$LLAMA_CPP_CMAKE_ARGS${RESET})."
+        if [ -n "$LLAMA_CPP_CMAKE_ARGS" ]; then _print_warning "GPU build failed." >&2; if _prompt_user_yes_no "Attempt ${BOLD}CPU-only${RESET} build?" "Y"; then if ! pdm install -G dev --no-self; then _print_error "CPU build failed."; exit 1; fi; else _print_error "Install aborted."; exit 1; fi; else _print_error "Install failed."; exit 1; fi; fi
     _print_msg "Project dependencies installed/updated."
 
     _print_section_header "Step 4: Configuring Environment (.env file)"
