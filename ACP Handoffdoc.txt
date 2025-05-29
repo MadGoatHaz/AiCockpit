@@ -1,3 +1,50 @@
+## Session Update: 2024-06-02
+
+**Context:** This session focused on resolving backend startup issues and addressing several frontend errors, followed by documentation updates.
+
+**Work Completed:**
+
+1.  **Backend - FastAPI Startup Fixes (`acp_backend/routers/workspace_files.py`):**
+    *   Corrected `AssertionError: \`Query\` default value cannot be set in \`Annotated\`...` by ensuring default values for `Query` parameters (like `relative_path`, `path`) are assigned with `=` outside the `Annotated` and `Query()` call (e.g., `param: Annotated[str, Query(description="...")] = "default_value"`).
+    *   Corrected `AssertionError: Cannot specify \`Depends\` in \`Annotated\` and default value together...` by removing the redundant `= Depends(...)` assignment from parameters already typed with an `Annotated[..., Depends(...)]` alias (e.g., `session_handler: SessionHandlerDep`).
+    *   Reordered function parameters to ensure non-default arguments (like `session_handler`) precede arguments with default values, resolving linter errors.
+    *   Added `python-multipart` dependency to the backend via `pdm add python-multipart` to enable file uploads.
+    *   Ensured `FileNode` instances created in `list_files_in_session_directory` include the required `id` field, mapping it from `item_relative_path`.
+
+2.  **Frontend - Error Resolution & Adjustments:**
+    *   **`TerminalManagerPanel.tsx`:** Dynamically imported with `ssr: false` in `interact/page.tsx` to resolve the "self is not defined" error during server-side rendering.
+    *   **`FileBrowserPanel.tsx`:** Corrected a linter error by replacing `AlertDialogTitle` with `DialogTitle`.
+    *   Addressed `npm run dev` failure by ensuring the command is run from the `acp_frontend` directory.
+
+3.  **Server Startup Attempts:**
+    *   Made several attempts to start the backend and frontend servers. Backend startup was initially hindered by the FastAPI assertion errors. Frontend startup initially failed due to running `npm run dev` from the wrong directory.
+    *   Current status of servers is pending verification after the latest FastAPI fixes.
+
+4.  **Documentation Updates:**
+    *   **`README.md`:**
+        *   Added a Table of Contents for easier navigation.
+        *   Updated the "Roadmap & Current Focus" section with more explicit checkmark emojis (✅, 🚧, ⏳) to reflect current progress.
+        *   Updated content in "Key Features", "Roadmap", and "Tech Stack" to reflect recent developments and backend fixes.
+        *   Refined "Getting Started" instructions.
+    *   **`ACP Handoffdoc.txt`:** This entry is being updated.
+
+**Identified Issues (from previous user feedback, pending verification after server restarts):**
+*   Console Error: "Internal Server Error" in `FileBrowserPanel.tsx` (likely due to previous backend issues).
+*   Console Error: "Terminal WebSocket error: {}" in `TerminalManagerPanel.tsx`.
+*   Runtime Error: "Cannot read properties of undefined (reading 'dimensions')" (likely related to terminal initialization).
+*   Layout: "Windows on the page are too long" - needs further clarification and CSS adjustments once the application is stable.
+
+**Next Steps:**
+1.  Verify successful startup of both backend and frontend servers with the latest fixes.
+2.  Test core functionalities:
+    *   File listing in `FileBrowserPanel`.
+    *   Terminal connection and basic operation in `TerminalManagerPanel`.
+3.  If errors persist, diagnose and resolve them.
+4.  Address the layout/scaling issue for the panels on the `/interact` page.
+5.  Continue with further feature development or refinements as directed.
+
+**End of Session.**
+
 ## Session Handoff: 2024-05-29 (Continued)
 
 **Context:** This session follows previous work on the AiCockpit frontend. The Handoff Document was renamed to `ACP Handoffdoc.txt` after issues with the AI assistant's ability to edit/read the previous versions. The purpose of this document (for AI-to-AI handoff) was clarified and added to `README.md`.

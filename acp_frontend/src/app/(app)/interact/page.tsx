@@ -6,30 +6,41 @@ import React, { useState, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, XIcon } from 'lucide-react';
+import dynamic from 'next/dynamic'; // Import dynamic
 
 // Import the new panel components
-import FileBrowserPanel, { FileSystemItem } from "@/components/workspaces/FileBrowserPanel";
+import FileBrowserPanel, { FileSystemDisplayItem as FileSystemItem } from "@/components/workspaces/FileBrowserPanel";
 import EditorPanel from "@/components/workspaces/EditorPanel";
-import TerminalManagerPanel from "@/components/workspaces/TerminalManagerPanel";
+// Dynamically import TerminalManagerPanel with SSR disabled
+const TerminalManagerPanel = dynamic(() => import("@/components/workspaces/TerminalManagerPanel"), { ssr: false });
 import AiChatPanel from "@/components/workspaces/AiChatPanel";
 import WorkspaceSettingsPanel from "@/components/workspaces/WorkspaceSettingsPanel";
+import AIModelConfigurationPanel from '@/components/workspaces/AIModelConfigurationPanel';
 
 // Define a type for a workspace
 interface Workspace {
   id: string;
   name: string;
   selectedFile: FileSystemItem | null;
-  // Later, we can add more properties like file tree, open files, panel layouts, etc.
+  // AI Configuration for this workspace
+  aiConfig: {
+    selectedModelId: string;
+    temperature: number;
+  };
+  // Which right-side panel is active: 'chat' or 'ai_settings' or 'ws_settings'
+  activeRightPanel: 'chat' | 'ai_settings' | 'ws_settings'; 
 }
+
+const DEFAULT_AI_CONFIG = {
+    selectedModelId: "gemma2-latest", // Default model
+    temperature: 0.7,
+};
 
 export default function InteractPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([
-    // Initialize with one static workspace to prevent hydration errors
-    { id: "ws-1", name: "Workspace 1", selectedFile: null }
+    { id: "ws-1", name: "Workspace 1", selectedFile: null, aiConfig: { ...DEFAULT_AI_CONFIG }, activeRightPanel: 'chat' }
   ]);
-  const [activeTab, setActiveTab] = useState<string>("ws-1"); // Default to the static ID
-
-  // Use a ref for the counter for new workspaces. Start at 2 because ws-1 is statically created.
+  const [activeTab, setActiveTab] = useState<string>("ws-1");
   const workspaceCounterRef = useRef(2);
 
   const addWorkspace = () => {
@@ -39,6 +50,8 @@ export default function InteractPage() {
       id: newWorkspaceId,
       name: `Workspace ${newWorkspaceNumber}`,
       selectedFile: null,
+      aiConfig: { ...DEFAULT_AI_CONFIG },
+      activeRightPanel: 'chat',
     };
     setWorkspaces(prevWorkspaces => [...prevWorkspaces, newWorkspace]);
     setActiveTab(newWorkspaceId);
@@ -67,9 +80,25 @@ export default function InteractPage() {
 
   const currentWorkspace = workspaces.find(ws => ws.id === activeTab);
 
-  // For the right-side panel, decide which component to show (e.g., AI Chat or Settings)
-  // This could be managed by another state variable per workspace, or a sub-tab system.
-  // For now, let's just show AiChatPanel by default.
+  // For the right-side panel, decide which component to show
+  const handleAiConfigurationChange = (workspaceId: string, config: { selectedModelId?: string, temperature?: number }) => {
+    setWorkspaces(prevWorkspaces =>
+      prevWorkspaces.map(ws =>
+        ws.id === workspaceId
+          ? { ...ws, aiConfig: { 
+                selectedModelId: config.selectedModelId || ws.aiConfig.selectedModelId,
+                temperature: config.temperature ?? ws.aiConfig.temperature,
+            } }
+          : ws
+      )
+    );
+  };
+
+  const setActiveRightPanelForCurrentWorkspace = (panel: 'chat' | 'ai_settings' | 'ws_settings') => {
+    if (currentWorkspace) {
+        setWorkspaces(prev => prev.map(ws => ws.id === currentWorkspace.id ? {...ws, activeRightPanel: panel} : ws));
+    }
+  };
 
   return (
     <div className="flex flex-col h-full p-4 md:p-6">
@@ -133,10 +162,35 @@ export default function InteractPage() {
                     />
                   )}
                 </div>
-                <div className="col-span-2 bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2"> {/* AiChatPanel - Added bg-card, text-card-foreground, p-2 */}
-                  <AiChatPanel workspaceId={ws.id} />
-                  {/* Placeholder for WorkspaceSettingsPanel later */}
-                  {/* <WorkspaceSettingsPanel workspaceId={ws.id} /> */}
+                <div className="col-span-2 bg-card text-card-foreground rounded-lg border h-full flex flex-col overflow-auto"> {/* Right Panel Container */}
+                  {/* Tabs or Buttons to switch between Chat, AI Settings, WS Settings */}
+                  {currentWorkspace && (
+                    <div className="p-2 border-b flex space-x-1">
+                        <Button variant={currentWorkspace.activeRightPanel === 'chat' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('chat')}>AI Chat</Button>
+                        <Button variant={currentWorkspace.activeRightPanel === 'ai_settings' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('ai_settings')}>AI Config</Button>
+                        <Button variant={currentWorkspace.activeRightPanel === 'ws_settings' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('ws_settings')}>WS Settings</Button>
+                    </div>
+                  )}
+
+                  <div className="flex-grow overflow-auto p-1">
+                    {currentWorkspace?.activeRightPanel === 'chat' && currentWorkspace && (
+                        <AiChatPanel 
+                            workspaceId={currentWorkspace.id} 
+                            // Pass AI config to chat panel
+                            selectedModelId={currentWorkspace.aiConfig.selectedModelId}
+                            temperature={currentWorkspace.aiConfig.temperature}
+                        />
+                    )}
+                    {currentWorkspace?.activeRightPanel === 'ai_settings' && currentWorkspace && (
+                        <AIModelConfigurationPanel 
+                            workspaceId={currentWorkspace.id} 
+                            onConfigurationChange={(config) => handleAiConfigurationChange(currentWorkspace.id, config)}
+                        />
+                    )}
+                    {currentWorkspace?.activeRightPanel === 'ws_settings' && currentWorkspace && (
+                        <WorkspaceSettingsPanel workspaceId={currentWorkspace.id} />
+                    )}
+                  </div>
                 </div>
               </div>
 

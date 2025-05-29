@@ -21,7 +21,8 @@ dependencies = [
     "huggingface_hub>=0.18.0", # For Hugging Face Hub interactions
     "smolagents>=0.1.0", # Placeholder version, adjust when integrating
     "httpx>=0.24.0", # For async HTTP requests (can also be used for testing)
-    "aiofiles>=23.0.0" # For async file operations if needed by FastAPI (e.g. FileUploads)
+    "aiofiles>=23.0.0", # For async file operations if needed by FastAPI (e.g. FileUploads)
+    "python-multipart>=0.0.20"
 ]
 requires-python = ">=3.10" # Recommended Python version
 readme = "README.md" 

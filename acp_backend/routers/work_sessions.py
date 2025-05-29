@@ -12,6 +12,7 @@ from acp_backend.models.work_session_models import (
     SessionMetadata,
     SessionUpdate,
 )
+from acp_backend.models.ai_config_models import AIModelSessionConfig
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -249,3 +250,67 @@ async def delete_work_session_by_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}",
         )
+
+
+# --- Endpoints for Session AI Model Configuration ---
+
+@router.get(
+    "/{session_id}/ai_config",
+    response_model=AIModelSessionConfig,
+    summary="Get AI Model Configuration for a Work Session",
+    tags=[TAG_SESSIONS],
+    dependencies=[Depends(_check_module_enabled)],
+)
+async def get_session_ai_config(
+    session_id: Annotated[str, Path(..., description="The unique ID of the work session.")],
+    handler: SessionHandlerCheckedDep,
+):
+    logger.debug(f"Request for AI model config for session: {session_id}")
+    try:
+        from uuid import UUID
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid session_id format.")
+
+    ai_config = await handler.get_ai_model_session_config(session_uuid)
+    if not ai_config:
+        # Return a default or empty config if none exists, or 404 if preferred
+        # For now, let's return a default AIModelSessionConfig to make client handling easier
+        logger.info(f"No specific AI model config found for session {session_id}, returning default/empty.")
+        return AIModelSessionConfig() # Returns a model with all fields as None or default
+        # If 404 is preferred:
+        # raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"AI Model configuration not found for session '{session_id}'.")
+    return ai_config
+
+@router.put(
+    "/{session_id}/ai_config",
+    response_model=AIModelSessionConfig,
+    summary="Update AI Model Configuration for a Work Session",
+    tags=[TAG_SESSIONS],
+    dependencies=[Depends(_check_module_enabled)],
+)
+async def update_session_ai_config(
+    session_id: Annotated[str, Path(..., description="The ID of the work session to update AI config for.")],
+    config_data: Annotated[AIModelSessionConfig, Body(...)],
+    handler: SessionHandlerCheckedDep,
+):
+    logger.info(f"Request to update AI model config for session: {session_id} with data: {config_data.model_dump(exclude_unset=True)}")
+    try:
+        from uuid import UUID
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid session_id format.")
+
+    updated_config = await handler.update_ai_model_session_config(session_uuid, config_data)
+    if not updated_config:
+        # This could be because the session itself doesn't exist or write failed
+        # Check if session exists to give a more specific error
+        session_meta = await handler.get_session_metadata(session_uuid)
+        if not session_meta:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Work Session ID '{session_id}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update AI model configuration for session '{session_id}'.",
+        )
+    logger.info(f"AI model config for session '{session_id}' updated successfully.")
+    return updated_config
