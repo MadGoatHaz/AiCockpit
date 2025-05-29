@@ -2,7 +2,7 @@
 import type { Config } from "tailwindcss"
 
 const config = {
-  darkMode: ["class"], // Standard ShadCN setup
+  darkMode: "class", // Changed from ["class"] to "class"
   content: [
     './pages/**/*.{ts,tsx}', // Include if you have a pages dir
     './components/**/*.{ts,tsx}',
@@ -23,8 +23,8 @@ const config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))", // Crucial for bg-background
-        foreground: "hsl(var(--foreground))", // Crucial for text-foreground
+        background: "#FF00FF", // Magenta for testing
+        foreground: "#00FF00", // Green for testing
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

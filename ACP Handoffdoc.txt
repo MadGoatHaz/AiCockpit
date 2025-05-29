@@ -166,4 +166,43 @@
 
 **End of Session.**
 
+## Session Update: 2024-06-01
+
+**Context:** This session aimed to address persistent UI styling issues where the application rendered with default browser styles (white background, black text) instead of the intended ShadCN dark theme. The previous frontend setup using `react-resizable-panels` was also slated for an update towards a CSS grid layout, guided by an MHTML mockup.
+
+**Troubleshooting & Resolution - The "Scorched Earth" Approach:**
+
+1.  **Initial Debugging:** Extensive troubleshooting was performed on the existing `acp_frontend` project. This included:
+    *   Verifying `globals.css` for Tailwind directives and CSS theme variables.
+    *   Ensuring `globals.css` was imported in `layout.tsx`.
+    *   Modifying `layout.tsx` to use `bg-background` and `text-foreground` directly.
+    *   Inspecting and modifying `tailwind.config.ts` for correct content paths and theme extensions.
+    *   Investigating `postcss.config.mjs`, including deleting it and recreating it with various standard configurations (Tailwind v3 and v4 plugin names, array vs. object plugin formats).
+    *   Testing with and without Next.js Turbopack.
+    *   Clearing `.next` cache and `node_modules` multiple times.
+    *   Attempting direct Tailwind color classes (e.g., `bg-red-500`) to test fundamental Tailwind processing.
+    *   Despite these efforts, the application consistently failed to apply any Tailwind-based styling, falling back to default browser styles.
+
+2.  **Project Re-initialization:** Due to the intractable nature of the styling issues, a decision was made to re-initialize the frontend project:
+    *   The existing `acp_frontend` contents were backed up (to `acp_frontend_backup`).
+    *   A new Next.js project was scaffolded in `acp_frontend` using `npx create-next-app@latest` with options for TypeScript, Tailwind CSS, ESLint, App Router, and `src/` directory.
+    *   ShadCN UI was initialized using `npx shadcn@latest init`, configuring the "Neutral" theme and CSS variables.
+    *   Essential ShadCN UI components (`button`, `tabs`, `input`, `scroll-area`, `textarea`, `dialog`, `dropdown-menu`, `tooltip`, `resizable`, `sonner`) were added.
+
+**Current State (Post Re-initialization):**
+
+*   **Styling Operational:** The re-initialized `acp_frontend` project now correctly applies Tailwind CSS and ShadCN UI theming. The application renders with the intended dark theme (Neutral theme default).
+*   **Layout & Components Ported:**
+    *   The `interact/page.tsx` (containing the tabbed workspace logic and the CSS grid layout: top row for FileBrowser, Editor, AiChat; bottom row for Terminal) was copied from the backup into the new project structure (`src/app/(app)/interact/page.tsx`).
+    *   The custom panel components (`FileBrowserPanel.tsx`, `EditorPanel.tsx`, `TerminalManagerPanel.tsx`, `AiChatPanel.tsx`, `WorkspaceSettingsPanel.tsx`) were copied from backup into `src/components/workspaces/`.
+    *   Initial checks of import paths in `interact/page.tsx` and `FileBrowserPanel.tsx` suggest they are largely compatible with the new structure.
+*   **Dark Mode Enforced:** The `layout.tsx` was updated to include `className="dark"` on the `<html>` tag to ensure consistent dark mode, and `SonnerToaster` for notifications was added.
+*   **Visual Confirmation:** The `/interact` page now renders correctly with the dark theme, styled components, and the established CSS grid layout containing the mock panel UIs.
+
+**Next Steps (Identical to end of last session, now that UI is stable):**
+1.  Make a checkpoint: Update `README.md` and `ACP Handoffdoc.txt` (this entry), then commit and push to GitHub.
+2.  Continue enhancing panel functionality (e.g., more realistic editor behavior, terminal interaction, AI chat functionality, implement Workspace Settings, add AI Model Configuration Panel) based on the MHTML mockup features.
+
+**End of Session.**
+
 

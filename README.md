@@ -26,7 +26,7 @@ While prioritizing local AI and data sovereignty, AiCockpit will also embrace a 
 The ultimate aspiration for AiCockpit is to evolve into a **comprehensive, collaborative Ai work environment that verges on being an operating system in itself.** We envision a future where you can interact with AiCockpit not just through typing, but through **voice commands** and other intuitive modalities, unlocking new levels of productivity and creative partnership with AI. It's about building a foundational platform for human-AI collaboration on *any* conceivable project.
 
 **Current Version:** 0.2.5-alpha (Backend Stable, Frontend In Progress)
-**Last Updated:** May 30, 2025
+**Last Updated:** June 1, 2024
 
 ---
 
@@ -96,14 +96,22 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
 *   💡 **Persistent Info Widgets:** Toggleable overlay widgets for CPU, Memory, etc., displaying mock data.
 *   🤖 **Genkit Integration (Initial):** Basic structure for Genkit flows (e.g., `summarize-logs`).
 *   🧩 **Workspaces Page (`/interact`):**
+    *   **Project Re-initialization & Styling Fix:** The frontend project (Next.js, Tailwind CSS, ShadCN UI) was re-initialized to resolve fundamental styling and theming issues. The application now correctly displays with the intended dark theme and component styling.
     *   **Tabbed Interface:** Implemented using ShadCN `Tabs` for managing multiple workspaces.
-    *   **Resizable Panel Layout:** A three-panel horizontal layout (File Browser, Editor/Terminal, AI Chat/Settings) within each workspace tab, built with `react-resizable-panels`. The central panel is further split vertically.
-    *   **Core Panel Implementation (Mock UIs):**
-        *   `FileBrowserPanel.tsx`: Displays a mock file tree with folder expansion/collapse and file selection interactivity.
-        *   `EditorPanel.tsx`: Shows a mock text area, dynamically updates with the selected file name from the File Browser.
-        *   `TerminalManagerPanel.tsx`: Provides a mock terminal interface with command input, output display, and basic command history.
-        *   `AiChatPanel.tsx`: Features a mock chat interface with user/AI message display and input.
-        *   `WorkspaceSettingsPanel.tsx`: Basic UI for displaying workspace ID and placeholder settings.
+    *   **CSS Grid Panel Layout:** The layout within each workspace tab now uses a CSS Grid. The current configuration features a main top row with `FileBrowserPanel` (1 column), `EditorPanel` (3 columns), and `AiChatPanel` (2 columns), and a bottom row dedicated to the `TerminalManagerPanel` (spanning full width).
+    *   **Core Panel Implementation (Mock UIs):** The previously developed panel components (`FileBrowserPanel.tsx`, `EditorPanel.tsx`, `TerminalManagerPanel.tsx`, `AiChatPanel.tsx`, `WorkspaceSettingsPanel.tsx`) have been successfully ported into this new structure. Their mock UIs and basic interactivity (file selection, folder expansion) are functional and correctly styled.
+    *   Simulate client-side file operations and AI interactions as placeholders for backend integration: **Basic file selection linked to editor display is functional.**
+    *   **MHTML Mockup Feature Integration:** An `AiCockpit.mhtml` mockup (previously reviewed for layout) remains a valuable source for feature enhancements within the current panel components. Future work will focus on integrating these richer features (e.g., upload button in File Browser, model selection & advanced settings in AI Chat, internal tabs in Terminal, extensive workspace/model tuning settings in Workspace Settings).
+    *   API client for seamless backend communication (including SSE).
+2.  🤖 **Backend Enhancements (Parallel/Future):**
+    *   **Full `smolagents` Integration:** Implement the agent execution logic beyond the current placeholder.
+    *   **Basic User Authentication:** Simple, secure auth for a local-first setup.
+3.  🌱 **OSS Readiness & Community Building (Ongoing):**
+    *   Enhance API documentation (OpenAPI + narrative docs).
+    *   Create a comprehensive Developer Guide.
+    *   Maintain `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+
+*(For a more granular breakdown of the backend's history, see the original `AiCockpit outline - Handoff Doc.txt`.)*
 
 ---
 
@@ -121,9 +129,10 @@ The AiCockpit frontend is being built with **Next.js (App Router), React, TypeSc
     *   **Base UI Components (ShadCN): Done!** (Button, Card, Tooltip, Sheet, DropdownMenu, Tabs, Chart)
     *   **Workspaces Page (`/interact`): Current Focus - Partially Done**
         *   Implement tabbed interface for managing multiple workspaces: **Done!**
-        *   Develop core panels within a workspace: File Browser, AI Chat, File Viewer, Workspace Settings, AI Model & Parameters, Terminal Manager: **Initial mock UIs and basic interactivity for all five core panels implemented (FileBrowser, Editor, TerminalManager, AiChat, WorkspaceSettings).**
+        *   Stabilize core styling and theming: **Done!** (Achieved via project re-initialization)
+        *   Develop core panels within a workspace using a CSS Grid layout: **Initial CSS Grid with five core panels (FileBrowser, Editor, TerminalManager, AiChat, WorkspaceSettings) displaying mock UIs and basic interactivity is implemented and styled.**
         *   Simulate client-side file operations and AI interactions as placeholders for backend integration: **Basic file selection linked to editor display is functional.**
-        *   **MHTML Mockup Review & Future Considerations:** An `AiCockpit.mhtml` mockup provided by the user was reviewed. It showcases an alternative, more complex grid-based panel layout within workspaces, with individual panel controls (visibility, S/M/L sizing, height). It also details richer features for each panel (e.g., upload in File Browser, model selection & advanced settings in AI Chat, internal tabs in Terminal, extensive workspace/model tuning settings). These provide valuable insights for future enhancements and potential layout refactoring.
+        *   **MHTML Mockup Feature Integration:** An `AiCockpit.mhtml` mockup (previously reviewed for layout) remains a valuable source for feature enhancements within the current panel components. Future work will focus on integrating these richer features (e.g., upload button in File Browser, model selection & advanced settings in AI Chat, internal tabs in Terminal, extensive workspace/model tuning settings in Workspace Settings).
     *   API client for seamless backend communication (including SSE).
 2.  🤖 **Backend Enhancements (Parallel/Future):**
     *   **Full `smolagents` Integration:** Implement the agent execution logic beyond the current placeholder.
