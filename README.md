@@ -1,307 +1,194 @@
+<div align="center">
+  <!-- ![AiCockpit Logo](placeholder_for_logo.png) -->
+  <h1>🚀 AiCockpit 🚀</h1>
+  <p><strong>Your Self-Hosted, AI-Powered Command Center for Local Development & Creativity!</strong></p>
+  <p>
+    <!-- Placeholder for badges -->
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+    <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
+    <img src="https://img.shields.io/badge/status-alpha-orange.svg" alt="Status: Alpha">
+    <!-- Add more badges as needed: build status, coverage, etc. -->
+  </p>
+</div>
 
 ---
 
-## AiCockpit Handoff Document
+## 👋 Welcome to AiCockpit!
 
-**Date:** May 26, 2025
-**Version:** 0.1.0-alpha (reflecting current backend state)
+**AiCockpit (ACP)** is an ambitious open-source project to create a locally hosted backend API and, ultimately, a full-fledged web application. Imagine a powerful, private workspace, running on your own hardware, where you can seamlessly manage Large Language Models (LLMs), orchestrate AI agents, and organize your projects with AI assistance.
 
-This document provides a comprehensive overview of the AiCockpit project, its current state, and the envisioned path forward for development. It is intended for developers joining the project or for the original developer to resume work.
+Our goal is to build something like Google's Gemini or OpenAI's ChatGPT, but **self-hosted, highly customizable, and focused on empowering developers and creators on their local machines** (initially targeting Linux/Ubuntu).
 
----
-
-### 1. Project Overview & Vision
-
-*   **Name:** AiCockpit Backend (ACP)
-*   **Purpose:** AiCockpit aims to be a locally hosted backend API, forming the core of an AI-driven workspace. It's designed to enable sophisticated Large Language Model (LLM) management, versatile AI agent execution, and persistent, organized work session management.
-*   **Ultimate Vision:** The project aspires to deliver a self-hosted web application, reminiscent of platforms like Google's Gemini, featuring a dynamic "canvas" for file and project interaction alongside a dedicated AI chat interface. This system will empower users to run their chosen GGUF (GPT-Generated Unified Format) models on local DIY hardware (initially targeting Linux/Ubuntu environments). Access will be facilitated via a standard web browser on the local network, providing a comprehensive, integrated AI workspace. A key long-term goal is for AiCockpit to become sufficiently advanced to assist in its own ongoing development.
-*   **Open Source Goal:** AiCockpit is intended to be an open-source project, shared on GitHub under the MIT license. This approach aims to encourage community involvement, contributions, and broad adoption.
+**Current Version:** 0.2.0-alpha (Backend Stable, Frontend Development Starting)
+**Last Updated:** May 28, 2024
 
 ---
 
-### 2. Current Project State (Backend Focus)
+## 🌟 Core Vision
 
-*   **Architecture:** The foundation of AiCockpit is a Python (version 3.10 and newer) backend built with the FastAPI framework. PDM (Python Development Master) is utilized for robust dependency management and project tooling. A significant architectural principle is the use of a dependency injection pattern for core services, enhancing modularity and testability.
-*   **Key Implemented Features:**
-    *   **LLM Management:** The backend supports discovery of available GGUF models, loading models into memory (primarily via `llama-cpp-python`), unloading models, and direct interaction for chat completions. (See `acp_backend/routers/llm_service.py`).
-    *   **Agent Orchestration:** Functionality exists for configuring and executing AI agents. This includes support for both globally defined agent templates and session-specific (local) agent configurations. The integration with `smolagents` for the actual execution logic is currently a placeholder and requires full implementation. (See `acp_backend/routers/agents.py` and `acp_backend/core/agent_executor.py`).
-    *   **Work Session Management:** Users can create, list, retrieve metadata for, update, and delete distinct work sessions, allowing for organized, persistent project contexts. (See `acp_backend/routers/work_sessions.py`).
-    *   **Work Board (File System Access):** The API provides endpoints for file and directory operations (list, read, write, delete, move, create directory) within the dedicated data storage of each work session. (See `acp_backend/routers/work_board.py`).
-    *   **System Health & Configuration API:** Endpoints are available to check system status, module enablement, and view the loaded application configuration. (See `acp_backend/routers/system.py`).
-    *   **Streaming SSE:** Server-Sent Events are implemented and tested for real-time streaming of LLM chat completions and agent outputs.
-*   **Frontend:** Currently, no dedicated frontend web interface exists. The development of a user-friendly UI is the next major phase for the project.
-*   **Stability:** The backend is considered stable and robust, particularly after recent efforts to improve test coverage, refine the dependency injection mechanism, and ensure correct SSE streaming behavior.
+AiCockpit aspires to be:
+
+*   🧠 **An LLM Hub:** Easily discover, download, load, and chat with various GGUF-compatible models running locally.
+*   🤖 **An Agent Orchestrator:** Define, configure, and run AI agents (powered by frameworks like `smolagents`) for complex task automation.
+*   🛠️ **A Developer's Co-pilot:** Integrate AI deeply into your development workflow, from code generation to debugging and documentation.
+*    organizar **An Organized Workspace:** Manage distinct work sessions, each with its own file system ("Work Board") and context, keeping your projects tidy and your AI interactions persistent.
+*   🌐 **A Collaborative Platform (Eventually):** While starting local-first, we envision a future where you can securely share and collaborate within your AiCockpit instance.
+*   🔥 **Open & Extensible:** Built with Python, FastAPI, and a modular architecture, AiCockpit is designed for community contributions and easy extension. We aim for AiCockpit to eventually become smart enough to help with its own development!
 
 ---
 
-### 2.1. Recent Development Highlights & Stability (Late May 2025)
+## ✨ Key Features (Backend - Solid & Ready!)
 
-*   **Comprehensive Testing & Debugging:** Significant effort was dedicated to rigorous testing of the backend, particularly the API endpoints. This involved:
-    *   Resolving numerous import errors and dependency conflicts that initially prevented tests from running.
-    *   Systematically addressing test failures, including complex issues related to asynchronous operations and Server-Sent Events (SSE) streaming.
-    *   Refining test logic, especially for SSE message parsing in `test_stream_llm_chat_completions`, to accurately reflect and validate the streaming behavior.
-*   **SSE Streaming Solidified:** The Server-Sent Events implementation for LLM chat completions and agent outputs was thoroughly debugged and validated, ensuring reliable real-time data streaming.
-*   **Dependency Injection Refinement:** The dependency injection pattern was further solidified, contributing to better testability and modularity of the backend services.
-*   **Achieved 100% Test Pass Rate:** As a result of these efforts, all defined unit and integration tests are currently passing, indicating a high degree of backend stability and correctness according to the existing test suite.
+The AiCockpit backend provides a robust set of APIs for:
 
----
-
-### 3. Technical Stack
-
-*   **Programming Language:** Python 3.10+
-*   **Web Framework:** FastAPI
-*   **ASGI Server:** Uvicorn
-*   **Dependency Management & Build System:** PDM
-*   **Data Validation & Settings:** Pydantic (v2), Pydantic-Settings (for environment variable and `.env` file management)
-*   **LLM Integration:**
-    *   `llama-cpp-python`: Primary library for loading and interacting with GGUF-formatted LLMs locally.
-    *   `smolagents`: Chosen agent framework; current integration primarily involves configuration management, with execution logic being a placeholder.
-*   **Asynchronous I/O:** `asyncio` (core Python), `anyio` (ASGI compatibility), `httpx` (for testing and potential future outbound API calls), `aiofiles` (for asynchronous file operations).
-*   **Streaming:** `sse-starlette` (for Server-Sent Events).
-*   **Testing:** `pytest`, `pytest-asyncio`, `pytest-mock`.
-*   **Linting & Formatting:** `Ruff` (for linting), `Black` (for code formatting).
-*   **Environment Configuration:** `.env` files parsed by `pydantic-settings`.
+*   🔮 **LLM Management:**
+    *   Discover available GGUF models.
+    *   Load/unload models (via `llama-cpp-python`).
+    *   Stream chat completions using Server-Sent Events (SSE).
+*   🧑‍✈️ **AI Agent Orchestration:**
+    *   Define global and session-specific agent configurations.
+    *   Execute agents (current `smolagents` integration is a functional placeholder, ripe for full implementation!).
+    *   Stream agent outputs via SSE.
+*   🗂️ **Work Session Management:**
+    *   Create, list, update, and delete distinct work sessions.
+    *   Each session has its own isolated data storage.
+*   📋 **Work Board (File System Access):**
+    *   Manage files and directories within each session (list, read, write, delete, move, create directory).
+*   ⚙️ **System & Configuration:**
+    *   Endpoints for system health, status, and viewing configurations.
+*   🛡️ **Stability & Testing:**
+    *   Comprehensive test suite with 100% pass rate (as of the last major refactor).
+    *   Robust dependency injection for modularity.
 
 ---
 
-### 4. Core Backend Components & Code Structure
+## 🚀 Why Contribute to AiCockpit?
 
-The backend is organized into several key directories and modules:
+AiCockpit is more than just a project; it's a launchpad for innovation in the self-hosted AI space! By contributing, you can:
 
-*   `acp_backend/main.py`: The main entry point for the FastAPI application. It initializes the app, sets up logging, manages the application lifecycle (startup/shutdown events for initializing services), and conditionally includes API routers based on configuration.
-*   `acp_backend/config.py`: Defines application settings using Pydantic's `BaseSettings`. Loads configuration from environment variables and `.env` files. It also defines and creates necessary base directories (e.g., for models, work sessions) upon import.
-*   `acp_backend/dependencies.py`: Implements FastAPI's dependency injection system. This module provides functions that instantiate and return singleton instances of core services (handlers and managers), ensuring they are consistently available throughout the application and easily mockable for tests.
-*   `acp_backend/core/`: Contains the core business logic of the application:
-    *   `llm_manager.py`: Manages loading, unloading, and interacting with LLMs.
-    *   `agent_executor.py`: Handles the execution flow for AI agents (currently placeholder for `smolagents` logic).
-    *   `agent_config_handler.py`: Manages CRUD operations for global and local agent configurations.
-    *   `session_handler.py`: Manages CRUD operations for work sessions, including their on-disk representation.
-    *   `fs_manager.py`: Provides an abstraction layer for file system operations within work session data directories, ensuring path safety.
-*   `acp_backend/routers/`: Contains FastAPI `APIRouter` modules, defining the API endpoints for different services:
-    *   `system.py`: System status, ping, configuration viewing.
-    *   `llm_service.py`: LLM discovery, loading, chat completions.
-    *   `agents.py`: Agent configuration (global and local) and execution (streaming and non-streaming).
-    *   `work_sessions.py`: Work session CRUD operations.
-    *   `work_board.py`: File system operations within sessions.
-*   `acp_backend/models/`: Defines Pydantic models used for API request and response validation, as well as internal data structures.
-*   `work_sessions/` (Typically located at `~/.acp/work_sessions` or `ACP_BASE_DIR/work_sessions`):
-    *   `_agent_configs/`: Stores JSON files for globally defined agent configurations.
-    *   `<session_id>/`: Each work session has its own directory, named by its UUID.
-        *   `_agents/`: Stores JSON files for agent configurations local to this session.
-        *   `data/`: The primary data storage area for files and artifacts related to this session.
-        *   `session_manifest.json`: Contains metadata about the work session (name, description, timestamps).
+*   🎯 **Shape the Future:** Play a key role in defining what a local-first AI command center looks like.
+*   🛠️ **Tackle Exciting Challenges:** From building intuitive UI components for LLM and agent management to implementing cutting-edge AI agent capabilities, there's no shortage of interesting problems to solve.
+*   🧑‍💻 **Work with Modern Tech:** Dive into a Python/FastAPI backend, and help choose and build with modern frontend technologies.
+*   🧠 **Learn & Grow:** Collaborate with a passionate (future!) community and expand your skills in AI, backend/frontend development, and open-source best practices.
+*   🌍 **Make an Impact:** Help create a tool that empowers developers and creators worldwide to harness the power of AI on their own terms.
+*   🚀 **Be Part of Something Big:** We're aiming high – to build a truly indispensable tool for the AI-assisted development workflow. And eventually, AiCockpit will help build itself!
+
+**We're particularly looking for collaborators interested in:**
+
+*   Frontend Development (React, Vue, Svelte, Lit, HTMX - we're open to suggestions!)
+*   Full `smolagents` integration and agent capability development.
+*   UI/UX Design for an AI-native experience.
+*   Expanding LLM support and integration.
+*   Documentation and community building.
 
 ---
 
-### 5. Development Environment Setup
+## 🎨 Sneak Peek (Coming Soon!)
+
+We're hard at work designing an intuitive and powerful interface for AiCockpit. Imagine a clean dashboard to manage your LLMs, a flexible canvas to organize your project files, and seamless interaction with your AI agents.
+
+*(Visuals, mockups, or a more detailed description of the planned UI will go here. Help us design it!)*
+
+---
+
+## 🛣️ Roadmap & Current Focus
+
+Our backend is stable and feature-rich. The **immediate high priority is building the Frontend Web Interface!**
+
+**Key Milestones Ahead:**
+
+1.  🌟 **Frontend Development (Phase 1 - Core UI):**
+    *   Select a modern web framework (React, Vue, Svelte, etc.).
+    *   Develop API client for seamless backend communication (including SSE).
+    *   Build core UI components for:
+        *   LLM Management (list, load/unload, status).
+        *   Agent Configuration (create, view, edit global/session agents).
+        *   Agent Execution (select agent, input prompts, stream outputs).
+        *   Work Session Management (create, list, select, delete).
+        *   "Canvas" File Explorer (browse session files via WorkBoard API).
+        *   Basic Chat Interface for LLMs.
+2.  🤖 **Backend Enhancements:**
+    *   **Full `smolagents` Integration:** Implement the agent execution logic beyond the current placeholder.
+    *   **Basic User Authentication:** Simple, secure auth for a local-first setup.
+3.  🌱 **OSS Readiness & Community Building:**
+    *   Enhance API documentation (OpenAPI + narrative docs).
+    *   Create a comprehensive Developer Guide.
+    *   Establish `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+
+*(For a more granular breakdown, see the original `HANDOFF_DOCUMENT.md` if you're diving deep into the project's history.)*
+
+---
+
+## 🛠️ Tech Stack Snapshot
+
+*   **Backend:** Python 3.10+, FastAPI, Uvicorn
+*   **LLM Integration:** `llama-cpp-python` (for GGUF models)
+*   **Agent Framework:** `smolagents` (integration in progress)
+*   **Async & Streaming:** `asyncio`, `anyio`, `sse-starlette`
+*   **Data Validation:** Pydantic v2, Pydantic-Settings
+*   **DevOps:** PDM (dependency management), `pytest` (testing), Ruff (linting), Black (formatting)
+*   **Frontend:** *To be determined! Your input is welcome!*  технологий
+
+---
+
+## 🧑‍💻 Getting Started (Developers)
+
+Ready to jump in? Here's how to get the backend up and running:
 
 1.  **Prerequisites:**
-    *   Python 3.10 or newer.
-    *   PDM (Python Development Master): Follow installation instructions at [pdm-project.org](https://pdm-project.org/).
-2.  **Clone the Repository:**
+    *   Python 3.10+
+    *   PDM: Install from [pdm-project.org](https://pdm-project.org/)
+2.  **Clone & Setup:**
     ```bash
-    git clone <your_repository_url>
+    git clone https://github.com/your-username/aicockpit.git # Replace with your repo URL
     cd aicockpit
+    pdm install -G dev
     ```
-3.  **Install Dependencies:**
-    *   Install main and development dependencies using PDM:
-        ```bash
-        pdm install -G dev
-        ```
-        This creates a local `.venv` in the project directory and installs all necessary packages.
-4.  **Configuration:**
-    *   Copy the example environment file:
-        ```bash
-        cp example.env .env
-        ```
-    *   Edit the `.env` file in the project root. Key variables to review/set:
-        *   `ACP_BASE_DIR`: The root directory where AiCockpit stores its data (models, sessions, logs). Defaults to `~/.acp`.
-        *   `MODELS_DIR`: Path to store GGUF language models. Defaults to `ACP_BASE_DIR/llm_models`.
-        *   `WORK_SESSIONS_DIR`: Path to store work session data. Defaults to `ACP_BASE_DIR/work_sessions`.
-        *   Other settings like `LLM_BACKEND_TYPE`, `LLAMA_CPP_*` parameters can be configured as needed.
-5.  **Running the Backend Server:**
-    *   Use the PDM script for development (includes auto-reload and debug logging):
-        ```bash
-        pdm run dev
-        ```
-    *   This typically starts the Uvicorn server on `http://localhost:8000`.
-6.  **Linting & Formatting:**
-    *   To check for linting issues:
-        ```bash
-        pdm run lint
-        ```
-    *   To automatically format code:
-        ```bash
-        pdm run format
-        ```
+3.  **Configure:**
+    ```bash
+    cp example.env .env
+    ```
+    *   Edit `.env` (especially `ACP_BASE_DIR`, `MODELS_DIR`).
+4.  **Run the Backend:**
+    ```bash
+    pdm run dev
+    ```
+    *   Server usually starts on `http://localhost:8000`.
+    *   API docs at `http://localhost:8000/docs`.
+5.  **Lint & Format:**
+    ```bash
+    pdm run lint
+    pdm run format
+    ```
+6.  **Run Tests:**
+    ```bash
+    pdm run test
+    ```
 
 ---
 
-### 6. Testing
+## 🤝 How to Contribute
 
-The project uses `pytest` for testing, with `pytest-asyncio` for asynchronous code and `pytest-mock` for mocking.
+We're thrilled you're considering contributing! Here's how you can help:
 
-1.  **Running Tests:**
-    *   Execute all tests using the PDM script:
-        ```bash
-        pdm run test
-        ```
-2.  **Test Structure:**
-    *   **Unit Tests:** Located in `tests/unit/`. These test individual modules and functions in isolation.
-    *   **Integration Tests:** Located in `tests/integration/`. These test the interaction between different components of the backend, including API endpoints.
-3.  **Key Fixtures:**
-    *   `tests/integration/conftest.py` defines crucial fixtures for integration testing. This includes fixtures that override the FastAPI dependencies for core services (`SessionHandler`, `LLMManager`, `AgentConfigHandler`, etc.) with test-specific instances or mocks. This is vital for creating a controlled test environment.
-    *   The `patch_anyio_event_for_sse` fixture is specifically important for testing SSE streaming endpoints to ensure compatibility with Pytest's asyncio event loop.
+1.  **Check out the Roadmap:** See what's currently in focus.
+2.  **Browse Open Issues:** Look for `good first issue` or `help wanted` tags (we'll add these soon!).
+3.  **Discuss Your Ideas:** Open an issue or join our (future) communication channel to discuss potential changes or new features.
+4.  **Fork & Pull Request:**
+    *   Fork the repository.
+    *   Create a new branch for your feature or bugfix.
+    *   Make your changes, adhering to code style (run `pdm run format`).
+    *   Ensure tests pass (`pdm run test`). Add new tests for new functionality.
+    *   Submit a pull request with a clear description of your changes.
 
----
-
-### 7. Path to a Fully Functional AI Workspace Web Interface (Next Steps & Future Development)
-
-The primary focus moving forward is the development of a web-based user interface and the full implementation of core backend functionalities that are currently placeholders.
-
-**A. Frontend Development (Immediate High Priority):**
-
-*   **Technology Selection:**
-    *   Evaluate and select a modern web framework. Options include React, Vue.js, Svelte, Lit, or potentially a simpler server-interfacing library like HTMX if a less SPA-heavy approach is desired for initial versions.
-*   **API Client Implementation:**
-    *   Develop a robust client-side service or set of utilities to communicate with the FastAPI backend. This should handle request/response cycles, error management, and importantly, SSE stream consumption.
-*   **Core UI Components Development:**
-    *   **LLM Management Dashboard:** Interface to list available/loaded models, display their status, and trigger load/unload operations.
-    *   **Agent Configuration UI:** Forms and views for creating, viewing, and editing both global and session-scoped agent configurations.
-    *   **Agent Execution UI:** Allow users to select an agent, provide input prompts/parameters, initiate agent runs (both blocking and streaming), and view progress/outputs.
-    *   **Work Session Management UI:** Interface for creating new sessions, listing existing ones, selecting an active session to work in, and deleting sessions.
-    *   **"Canvas" Area / File Explorer:** A visual browser for the files and directories within the active work session's `data/` directory (interacting with the WorkBoard API). Basic file viewing and editing capabilities would be a starting point.
-    *   **Chat Interface:** A dedicated UI for direct chat interactions with loaded LLMs. This could later be extended for chat-based agent interactions.
-    *   **Real-time Log/Output Display:** A component to render streaming data from SSE endpoints (agent outputs, LLM tokens) in a user-friendly way.
-
-**B. Backend Enhancements & Feature Completion:**
-
-*   **User Authentication & Authorization (Basic):**
-    *   Implement a simple authentication mechanism suitable for a locally hosted, trusted environment. Options:
-        *   Static API key passed via HTTP header (configurable in `.env`).
-        *   Basic HTTP Authentication (username/password).
-    *   Avoid over-engineering for the initial local DIY use case; more complex auth can be added if the project evolves towards multi-user or public-facing scenarios.
-*   **`smolagents` Full Integration:**
-    *   Transition the `AgentExecutor` from placeholder logic to a full implementation utilizing the `smolagents` library. This includes:
-        *   Defining how agents receive initial prompts, context (e.g., session history, relevant files from the work board), and configuration.
-        *   Implementing concrete agent "tools" or capabilities. Examples:
-            *   File system operations via `FileSystemManager`.
-            *   Web search (e.g., using the `SERPER_API_KEY` if configured).
-            *   A sandboxed code execution environment for agents that need to run scripts.
-        *   Establishing the agent lifecycle (start, run, stop, error states) and how agent state is managed or persisted (if required beyond session files).
-        *   Ensuring agent output (especially streaming chunks) is well-structured and contains necessary metadata for clear UI presentation.
-*   **Advanced Canvas/WorkBoard Features (Future Consideration):**
-    *   Depending on the "canvas" UI vision, the WorkBoard API might need extensions for richer file metadata, simple file versioning, or specialized handling/previewing of common AI-related file types (e.g., notebooks, datasets).
-*   **WebSockets (Optional Evaluation):**
-    *   While SSE is suitable for unidirectional server-to-client streams, evaluate if any planned UI features would significantly benefit from bidirectional, low-latency communication offered by WebSockets (e.g., real-time collaborative editing on the "canvas", interactive agent control beyond simple prompting).
-*   **(Optional) `PIEBackend` Implementation:**
-    *   If supporting alternative LLM backends beyond `llama-cpp-python` (e.g., connecting to a `text-generation-inference` server via a "PIE" - Python Inference Endpoint - client) becomes a priority, complete this implementation.
-
-**C. API Iteration:**
-
-*   As frontend development progresses and user interaction patterns become clearer, anticipate the need to refine existing API endpoints or add new ones to better support the UI. Maintain clear API contracts and versioning if necessary.
-
-**D. Enhanced Documentation & OSS Readiness:**
-
-*   **API Documentation:** Continuously leverage FastAPI's auto-generated OpenAPI docs (`/docs` and `/redoc`). Supplement this with narrative documentation (e.g., using MkDocs or similar) explaining concepts, workflows, and advanced usage.
-*   **Developer Guide:** Create and maintain a guide for developers covering project setup, architecture deep-dive, how to add new features (e.g., new agent tools, new API endpoints), and coding conventions.
-*   **Community Files:**
-    *   `CONTRIBUTING.md`: Guidelines for contributing to the project (code style, pull request process, issue reporting).
-    *   `CODE_OF_CONDUCT.md`: Establish community standards.
-*   **Test Coverage:** Maintain and expand test coverage, especially for new backend features and API endpoints critical for the web interface.
-
-**E. Packaging & Distribution (Initial Local Focus):**
-
-*   **Installation Script:** Review and improve the existing `install_acp.sh` for robustness and user-friendliness across different Linux distributions.
-*   **Dockerization (Consideration):** Develop a simple Dockerfile and `docker-compose.yml` setup. This can significantly ease local deployment for users by encapsulating dependencies and providing a consistent runtime environment, especially important for DIY hardware setups.
-
-**C. Continuous Improvement & DevOps:**
-
-*   **Enhanced Test Coverage:** While current tests pass, continuously evaluate and expand test coverage, especially as new features are added or existing ones are modified. Consider property-based testing or more complex integration scenarios.
-*   **CI/CD Pipeline:** Implement a Continuous Integration/Continuous Deployment (CI/CD) pipeline (e.g., using GitHub Actions) to automate testing, linting, and potentially deployments. This will help maintain code quality and streamline the development workflow.
-*   **Documentation Maintenance:** Keep this README and other relevant documentation up-to-date as the project evolves.
+Detailed contribution guidelines will be in `CONTRIBUTING.md`.
 
 ---
 
-### 8. Project Roadmap & Milestones (Illustrative)
+## 📜 License
 
-*   **A. Frontend Development (Immediate High Priority):**
-    *   **Technology Selection:**
-        *   Evaluate and select a modern web framework. Options include React, Vue.js, Svelte, Lit, or potentially a simpler server-interfacing library like HTMX if a less SPA-heavy approach is desired for initial versions.
-    *   **API Client Implementation:**
-        *   Develop a robust client-side service or set of utilities to communicate with the FastAPI backend. This should handle request/response cycles, error management, and importantly, SSE stream consumption.
-    *   **Core UI Components Development:**
-        *   **LLM Management Dashboard:** Interface to list available/loaded models, display their status, and trigger load/unload operations.
-        *   **Agent Configuration UI:** Forms and views for creating, viewing, and editing both global and session-scoped agent configurations.
-        *   **Agent Execution UI:** Allow users to select an agent, provide input prompts/parameters, initiate agent runs (both blocking and streaming), and view progress/outputs.
-        *   **Work Session Management UI:** Interface for creating new sessions, listing existing ones, selecting an active session to work in, and deleting sessions.
-        *   **"Canvas" Area / File Explorer:** A visual browser for the files and directories within the active work session's `data/` directory (interacting with the WorkBoard API). Basic file viewing and editing capabilities would be a starting point.
-        *   **Chat Interface:** A dedicated UI for direct chat interactions with loaded LLMs. This could later be extended for chat-based agent interactions.
-        *   **Real-time Log/Output Display:** A component to render streaming data from SSE endpoints (agent outputs, LLM tokens) in a user-friendly way.
-
-*   **B. Backend Enhancements & Feature Completion:**
-    *   **User Authentication & Authorization (Basic):**
-        *   Implement a simple authentication mechanism suitable for a locally hosted, trusted environment. Options:
-            *   Static API key passed via HTTP header (configurable in `.env`).
-            *   Basic HTTP Authentication (username/password).
-        *   Avoid over-engineering for the initial local DIY use case; more complex auth can be added if the project evolves towards multi-user or public-facing scenarios.
-    *   **`smolagents` Full Integration:**
-        *   Transition the `AgentExecutor` from placeholder logic to a full implementation utilizing the `smolagents` library. This includes:
-            *   Defining how agents receive initial prompts, context (e.g., session history, relevant files from the work board), and configuration.
-            *   Implementing concrete agent "tools" or capabilities. Examples:
-                *   File system operations via `FileSystemManager`.
-                *   Web search (e.g., using the `SERPER_API_KEY` if configured).
-                *   A sandboxed code execution environment for agents that need to run scripts.
-            *   Establishing the agent lifecycle (start, run, stop, error states) and how agent state is managed or persisted (if required beyond session files).
-            *   Ensuring agent output (especially streaming chunks) is well-structured and contains necessary metadata for clear UI presentation.
-    *   **Advanced Canvas/WorkBoard Features (Future Consideration):**
-        *   Depending on the "canvas" UI vision, the WorkBoard API might need extensions for richer file metadata, simple file versioning, or specialized handling/previewing of common AI-related file types (e.g., notebooks, datasets).
-    *   **WebSockets (Optional Evaluation):**
-        *   While SSE is suitable for unidirectional server-to-client streams, evaluate if any planned UI features would significantly benefit from bidirectional, low-latency communication offered by WebSockets (e.g., real-time collaborative editing on the "canvas", interactive agent control beyond simple prompting).
-    *   **(Optional) `PIEBackend` Implementation:**
-        *   If supporting alternative LLM backends beyond `llama-cpp-python` (e.g., connecting to a `text-generation-inference` server via a "PIE" - Python Inference Endpoint - client) becomes a priority, complete this implementation.
-
-*   **C. API Iteration:**
-    *   As frontend development progresses and user interaction patterns become clearer, anticipate the need to refine existing API endpoints or add new ones to better support the UI. Maintain clear API contracts and versioning if necessary.
-
-*   **D. Enhanced Documentation & OSS Readiness:**
-    *   **API Documentation:** Continuously leverage FastAPI's auto-generated OpenAPI docs (`/docs` and `/redoc`). Supplement this with narrative documentation (e.g., using MkDocs or similar) explaining concepts, workflows, and advanced usage.
-    *   **Developer Guide:** Create and maintain a guide for developers covering project setup, architecture deep-dive, how to add new features (e.g., new agent tools, new API endpoints), and coding conventions.
-    *   **Community Files:**
-        *   `CONTRIBUTING.md`: Guidelines for contributing to the project (code style, pull request process, issue reporting).
-        *   `CODE_OF_CONDUCT.md`: Establish community standards.
-    *   **Test Coverage:** Maintain and expand test coverage, especially for new backend features and API endpoints critical for the web interface.
-
-*   **E. Packaging & Distribution (Initial Local Focus):**
-    *   **Installation Script:** Review and improve the existing `install_acp.sh` for robustness and user-friendliness across different Linux distributions.
-    *   **Dockerization (Consideration):** Develop a simple Dockerfile and `docker-compose.yml` setup. This can significantly ease local deployment for users by encapsulating dependencies and providing a consistent runtime environment, especially important for DIY hardware setups.
-
-*   **F. Continuous Improvement & DevOps:**
-    *   **Enhanced Test Coverage:** While current tests pass, continuously evaluate and expand test coverage, especially as new features are added or existing ones are modified. Consider property-based testing or more complex integration scenarios.
-    *   **CI/CD Pipeline:** Implement a Continuous Integration/Continuous Deployment (CI/CD) pipeline (e.g., using GitHub Actions) to automate testing, linting, and potentially deployments. This will help maintain code quality and streamline the development workflow.
-    *   **Documentation Maintenance:** Keep this README and other relevant documentation up-to-date as the project evolves.
+AiCockpit is licensed under the [MIT License](LICENSE).
 
 ---
 
-### 9. Deployment & Operational Considerations (Local DIY Focus)
-
-*   **Target Environment:** Primarily Linux-based DIY machines (e.g., Ubuntu is a common user choice). The backend should be runnable on any system meeting Python and core dependency requirements.
-*   **Access Model:** The primary access method is via a web browser on the local network, connecting to the FastAPI server hosted on the DIY machine.
-*   **Resource Management:** Users must be made aware that running LLMs, especially larger ones, requires significant RAM and, for GPU-accelerated models (`llama-cpp-python` with GPU layers), VRAM. The backend application itself is relatively lightweight.
-*   **Python Environment:** PDM creates and manages a project-local virtual environment (typically in `.venv/` within the project root), ensuring dependency isolation.
-*   **Data Persistence:** All critical data is stored on the local file system:
-    *   Work session data (including user files, local agent configurations, and session manifests) is stored under the configured `WORK_SESSIONS_DIR/<session_id>/`.
-    *   Global agent configurations are stored as JSON files in `WORK_SESSIONS_DIR/_agent_configs/`.
-    *   LLMs are expected to be managed by the user within the `MODELS_DIR`.
-    *   Application logs are written to `LOG_DIR`.
-    *   (Note: All these base paths are configurable via the `.env` file and default to subdirectories under `ACP_BASE_DIR`).
-*   **Backup Strategy:** Users should be advised to regularly back up their `ACP_BASE_DIR` (or the custom paths they configure for `MODELS_DIR`, `WORK_SESSIONS_DIR`, etc.) to prevent data loss.
-
----
-
-### 10. Philosophy & Guiding Principles
-
-*   **Solid Backend First:** The project prioritizes a robust, well-tested, and modular backend as the stable foundation upon which further functionalities and the UI are built.
-*   **Local Control & Open Models:** A core tenet is to empower users with control over their AI tools and data by enabling the use of open-source and locally run LLMs (with a current focus on GGUF formats).
-*   **Open Source & Community Collaboration:** The project is intended to be open-source (MIT License) to foster a collaborative community, encouraging contributions, adaptations, and shared learning.
-*   **Self-Sufficient Workspace (Dogfooding):** The aspirational goal is for AiCockpit to evolve into a powerful AI workspace that can be used for its own development, embodying the principles of "eating your own dog food."
+*(The more detailed project history, initial planning, and in-depth component descriptions are preserved in `HANDOFF_DOCUMENT.md` for reference.)*
