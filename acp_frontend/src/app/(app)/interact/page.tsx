@@ -16,6 +16,8 @@ const TerminalManagerPanel = dynamic(() => import("@/components/workspaces/Termi
 import AiChatPanel from "@/components/workspaces/AiChatPanel";
 import WorkspaceSettingsPanel from "@/components/workspaces/WorkspaceSettingsPanel";
 import AIModelConfigurationPanel from '@/components/workspaces/AIModelConfigurationPanel';
+// Import AgentRunnerPanel (will be created next)
+import AgentRunnerPanel from "@/components/workspaces/AgentRunnerPanel";
 
 // Define a type for a workspace
 interface Workspace {
@@ -27,8 +29,8 @@ interface Workspace {
     selectedModelId: string;
     temperature: number;
   };
-  // Which right-side panel is active: 'chat' or 'ai_settings' or 'ws_settings'
-  activeRightPanel: 'chat' | 'ai_settings' | 'ws_settings'; 
+  // Which right-side panel is active: 'chat' or 'ai_settings' or 'ws_settings' or 'agentRunner'
+  activeRightPanel: 'chat' | 'ai_settings' | 'ws_settings' | 'agentRunner'; 
 }
 
 const DEFAULT_AI_CONFIG = {
@@ -102,7 +104,7 @@ export default function InteractPage() {
     );
   };
 
-  const setActiveRightPanelForCurrentWorkspace = (panel: 'chat' | 'ai_settings' | 'ws_settings') => {
+  const setActiveRightPanelForCurrentWorkspace = (panel: 'chat' | 'ai_settings' | 'ws_settings' | 'agentRunner') => {
     if (currentWorkspace) {
         setWorkspaces(prev => prev.map(ws => ws.id === currentWorkspace.id ? {...ws, activeRightPanel: panel} : ws));
     }
@@ -174,6 +176,7 @@ export default function InteractPage() {
                   {currentWorkspace && (
                     <div className="p-2 border-b flex space-x-1">
                         <Button variant={currentWorkspace.activeRightPanel === 'chat' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('chat')}>AI Chat</Button>
+                        <Button variant={currentWorkspace.activeRightPanel === 'agentRunner' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('agentRunner')}>Agent Runner</Button>
                         <Button variant={currentWorkspace.activeRightPanel === 'ai_settings' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('ai_settings')}>AI Config</Button>
                         <Button variant={currentWorkspace.activeRightPanel === 'ws_settings' ? 'secondary' : 'ghost'} size="sm" className="text-xs flex-1" onClick={() => setActiveRightPanelForCurrentWorkspace('ws_settings')}>WS Settings</Button>
                     </div>
@@ -184,6 +187,11 @@ export default function InteractPage() {
                             workspaceId={currentWorkspace.id} 
                             selectedModelId={currentWorkspace.aiConfig.selectedModelId}
                             temperature={currentWorkspace.aiConfig.temperature}
+                        />
+                    )}
+                    {currentWorkspace?.activeRightPanel === 'agentRunner' && currentWorkspace && (
+                        <AgentRunnerPanel 
+                            workspaceId={currentWorkspace.id} 
                         />
                     )}
                     {currentWorkspace?.activeRightPanel === 'ai_settings' && currentWorkspace && (

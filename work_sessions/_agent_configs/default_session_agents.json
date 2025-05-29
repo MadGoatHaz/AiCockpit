@@ -1,0 +1,45 @@
+{
+  "agents": [
+    {
+      "agent_id": "acp-code-generator",
+      "name": "AiCockpit Code Generator",
+      "description": "Generates Python code snippets based on user prompts using a local LLM.",
+      "agent_type": "CodeAgent",
+      "llm_model_id": "TheBloke/CodeLlama-7B-Instruct-GGUF/codellama-7b-instruct.Q4_K_M.gguf",
+      "system_prompt": "You are an expert Python programmer. Generate only Python code based on the user's request. Do not add any explanations or markdown formatting. Just the raw code.",
+      "tools": [],
+      "max_steps": 5,
+      "temperature": 0.2,
+      "max_tokens": 1000
+    },
+    {
+      "agent_id": "smol-gemini-test",
+      "name": "SmolAgent Gemini Test",
+      "description": "Test agent using smolagents with Google Gemini via LiteLLM.",
+      "agent_type": "CodeAgent",
+      "smol_model_provider": "LiteLLMModel",
+      "smol_model_id_override": "gemini/gemini-1.5-flash-latest", 
+      "smol_api_key_env_var": "GOOGLE_API_KEY",
+      "llm_model_id": null, 
+      "system_prompt": "You are a helpful AI assistant. If you use tools, explain your plan and then execute. If you are asked to write code, use the python_interpreter tool.",
+      "tools": ["python_interpreter", "web_search"],
+      "max_steps": 10,
+      "temperature": 0.7,
+      "max_tokens": 1500,
+      "verbose_logging": true
+    },
+    {
+      "agent_id": "smol-dev-code-generator",
+      "name": "Smol Dev Code Generator",
+      "description": "Generates a project structure and code using the smol_dev library.",
+      "agent_type": "SmolDevCodeGenerator",
+      "llm_model_id": null,
+      "system_prompt": "You are a smol developer. Your task is to generate a complete project based on the user's detailed prompt. Focus on creating a functional set of files.",
+      "tools": [],
+      "max_steps": 3, 
+      "temperature": 0.5, 
+      "max_tokens": 4000, 
+      "verbose_logging": true
+    }
+  ]
+} 
