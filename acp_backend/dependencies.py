@@ -66,24 +66,18 @@ def get_llm_manager( # Renamed from get_llm_manager_dependency
     return _llm_manager_instance
 
 
-def get_agent_config_handler( # Renamed from get_agent_config_handler_dependency
-    current_app_settings: Annotated[AppSettings, Depends(get_app_settings)]
+def get_agent_config_handler(
+    settings: Annotated[AppSettings, Depends(get_app_settings)],
+    session_handler: Annotated[SessionHandler, Depends(get_session_handler)]
 ) -> AgentConfigHandler:
     """Dependency to get the AgentConfigHandler singleton instance."""
     global _agent_config_handler_instance
     if _agent_config_handler_instance is None:
-        logger.info("Initializing AgentConfigHandler singleton.")
+        logger.debug("Initializing AgentConfigHandler instance.")
         _agent_config_handler_instance = AgentConfigHandler(
-            global_configs_path=str(current_app_settings.GLOBAL_AGENT_CONFIGS_DIR)
-            # The SessionHandler dependency for AgentConfigHandler was removed from its constructor
-            # in message #38, File 1, as it seemed to primarily need settings for its path.
-            # If AgentConfigHandler's __init__ *does* require session_handler_instance,
-            # you'd add:
-            # session_handler: Annotated[SessionHandler, Depends(get_session_handler)]
-            # and pass session_handler_instance=session_handler to the constructor.
-            # The version from message #38 did not require it.
+            session_handler_instance=session_handler,
+            settings_override=settings
         )
-    logger.debug("Providing AgentConfigHandler instance.")
     return _agent_config_handler_instance
 
 

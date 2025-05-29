@@ -19,13 +19,15 @@ dependencies = [
     "llama-cpp-python>=0.2.50", # Specify a recent version, check latest compatible
     "requests>=2.20.0", # General HTTP requests
     "huggingface_hub>=0.18.0", # For Hugging Face Hub interactions
-    "smolagents>=0.1.0", # Placeholder version, adjust when integrating
     "httpx>=0.24.0", # For async HTTP requests (can also be used for testing)
     "aiofiles>=23.0.0", # For async file operations if needed by FastAPI (e.g. FileUploads)
     "python-multipart>=0.0.20",
-    "ptyprocess>=0.7.0"
+    "ptyprocess>=0.7.0",
+    "smol-dev>=0.0.2",
+    "openai-function-call>=0.2.6",
+    "openai<0.28.0,>=0.27.8",
 ]
-requires-python = ">=3.10" # Recommended Python version
+requires-python = ">=3.11" # Recommended Python version
 readme = "README.md" 
 license = {text = "Proprietary"} 
 

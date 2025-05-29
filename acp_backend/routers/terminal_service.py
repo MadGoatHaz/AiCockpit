@@ -41,7 +41,7 @@ async def terminal_websocket_endpoint(
     session_handler: SessionHandlerDep,
     # token: Annotated[str | None, Cookie()] = None # Example for auth if needed
 ):
-    await _check_module_enabled(settings) # Ensure module is enabled before accepting websocket
+    _check_module_enabled(settings) # Ensure module is enabled before accepting websocket
     await websocket.accept()
 
     from uuid import UUID

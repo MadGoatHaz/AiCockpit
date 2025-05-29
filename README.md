@@ -200,6 +200,12 @@ This section outlines the immediate priorities to bring AiCockpit to a more robu
     *   Move beyond the current placeholder implementation.
     *   **Phase 1 Goal:** Allow users to select a predefined agent, provide a goal, and stream its output.
     *   Design and implement the necessary backend logic and frontend UI components for this.
+    *   **Update (Current Status & Potential Pivot):**
+        *   The `smolagents` library has been updated to its successor, `smol_dev`.
+        *   Significant dependency challenges were encountered with `smol_dev` (specifically, its reliance on `openai-function-call`, which requires an older `openai<0.28.0` library, conflicting with `litellm`'s need for `openai>=1.x`).
+        *   To test `smol_dev`'s core, `litellm` was temporarily removed, and `openai-function-call` along with `openai==0.27.10` were installed.
+        *   The immediate next step is to test `smol_dev` execution with a corrected API request payload.
+        *   **Strategic Consideration:** Google's Agent Development Kit (ADK) for Python (`google-adk`) has been identified as a potentially more robust and feature-rich framework. It offers comprehensive tools for building, evaluating, and deploying agents, with a strong emphasis on modularity and multi-agent systems. ADK might serve as a better foundation for AiCockpit's agent orchestration goals, potentially replacing the `smol_dev` integration effort. Further investigation and a small spike to test ADK are recommended.
 
 4.  **🔒 Implement Basic User Authentication:**
     *   Add a simple and secure authentication mechanism (e.g., application-wide password) for local network access.
@@ -292,46 +298,3 @@ Ready to jump in? Here's how to get AiCockpit up and running:
     pdm run lint
     pdm run format
     ```
-*   **Frontend (from `acp_frontend` directory):**
-    ```bash
-    npm run lint
-    # Add a format script to package.json if desired, e.g., using Prettier
-    # "format": "prettier --write ." 
-    ```
-
-### 4. Running Tests
-
-*   **Backend (from project root):**
-    ```bash
-    pdm run test
-    ```
-
----
-
-## ✨ Best Practices & Development Notes
-
-*(This section will be updated with guidelines and conventions as the project evolves. Contributions and suggestions are welcome!)*
-
-*   **Commit Messages:** Follow conventional commit guidelines (e.g., `feat: add new login component`, `fix: resolve issue with API endpoint`). This helps in automated changelog generation and project tracking.
-*   **Branching Strategy:** Use feature branches (e.g., `feature/HG-123-new-dashboard-widget` or `fix/HG-456-login-bug`). Create Pull Requests for review before merging to `main` or `develop` branch.
-*   **Code Style:**
-    *   **Backend (Python):** Adhere to Black for formatting and Ruff for linting (configured in `pyproject.toml`).
-    *   **Frontend (TypeScript/React):** Adhere to Prettier/ESLint configurations (typically in `package.json` and relevant config files).
-*   **Component Design (Frontend):**
-    *   Favor functional components with React Hooks.
-    *   Ensure components are modular and reusable where appropriate.
-*   **Error Handling:** Implement comprehensive error handling on both frontend and backend to provide clear feedback to users and developers.
-*   **Security:** Be mindful of security best practices, especially for file operations, API endpoints, and any user authentication mechanisms.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please refer to `CONTRIBUTING.md` for detailed guidelines on how to contribute to AiCockpit.
-The `CODE_OF_CONDUCT.md` outlines the expectations for community interactions.
-
----
-
-## 📜 License
-
-AiCockpit is licensed under the MIT License. See the `LICENSE` file for more details.

@@ -1,3 +1,50 @@
+## Session Update: 2024-06-04 (Current Session)
+
+**Context:** This session focused on integrating and testing the `smol_dev` agent for code generation, which involved significant dependency management and culminated in a strategic review of agent frameworks.
+
+**Work Completed:**
+
+1.  **`smol_dev` Dependency Resolution (Initial Attempts):
+    *   Identified that `smol_dev` (successor to `smolagents`) had a dependency on `openai-function-call`.
+    *   `openai-function-call` required an older `openai<0.28.0`, which conflicted with `litellm`'s requirement for `openai>=1.x`.
+    *   Attempted to update `smol_dev` to a newer version by adjusting `pyproject.toml`'s `requires-python` to `>=3.11` and using various `pdm update` strategies. However, `smol_dev` remained at version `0.0.2`, likely due to the underlying `openai` version conflict preventing resolution of newer `smol_dev` versions.
+
+2.  **`smol_dev` Dependency Resolution (Successful Workaround for Testing):
+    *   To enable testing of `smol_dev 0.0.2`, `litellm` was temporarily removed from the project dependencies (`pdm remove litellm`).
+    *   `openai-function-call` was successfully added (`pdm add openai-function-call`).
+    *   A compatible version of the `openai` library (`0.27.10`) was installed, satisfying `openai-function-call`'s requirements.
+    *   This resolved the backend startup warning about `No module named 'openai_function_call'`.
+
+3.  **API Request Correction (`RunAgentRequest`):
+    *   The `POST /agents/run/stream` endpoint was returning a `422 Unprocessable Content` error.
+    *   This was traced to an extra `settings_override: null` field in the JSON request payload, which is not present in the `RunAgentRequest` Pydantic model (which uses `extra="forbid"`).
+    *   Correcting the `curl` command to remove this extra field resolved the 422 error, resulting in a `200 OK` response.
+
+4.  **Agent Configuration Loading Observation:
+    *   A backend warning `Invalid session_id ... or agent_id ... provided for effective agent config lookup. Falling back to global.` was observed. This is acceptable for current testing as the `smol-dev-code-generator` is defined in the global `default_session_agents.json`.
+
+5.  **Strategic Review - Google Agent Development Kit (ADK):
+    *   Researched and reviewed Google's Agent Development Kit (ADK) for Python (`google/adk-python`) as a potential alternative/pivot from `smol_dev`.
+    *   ADK appears to be a more comprehensive, robust, and actively maintained framework for building modular and multi-agent systems, aligning well with AiCockpit's long-term vision.
+    *   Key ADK features include code-first development, a rich tool ecosystem, evaluation tools, and a development UI.
+    *   Given the persistent dependency issues with `smol_dev`, ADK is considered a strong candidate for the agent framework going forward.
+
+**Current State:**
+*   The backend is configured to potentially run `smol_dev 0.0.2` (with `litellm` removed and older `openai` installed).
+*   The immediate next step is to observe the output of a `curl` request to `smol_dev` to see if it executes its plan/specify/generate stages successfully using the OpenAI API.
+*   Google ADK has been identified as a highly promising alternative for AiCockpit's agent execution layer.
+
+**Next Steps (Proposed):
+1.  Observe the full streaming output from the `smol-dev-code-generator` agent via a `curl` request to verify its end-to-end functionality.
+2.  Based on the outcome and the potential of Google ADK:
+    *   Decide whether to continue attempting to fully integrate the current `smol_dev` (and later re-integrate `litellm`), OR
+    *   Prioritize a spike to experiment with Google ADK, potentially refactoring `AgentExecutor` and agent configurations to align with ADK.
+3.  Update `README.md` and `ACP Handoffdoc.txt` (this update).
+4.  Commit and push all changes.
+5.  Prepare for a new context window, likely focusing on either deep `smol_dev` testing/fixing or initial Google ADK exploration.
+
+**End of Session Update.**
+
 ## Session Update: 2024-06-03 (Current Session)
 
 **Context:** This session focused on verifying frontend-backend interactions after previous fixes, addressing UI layout issues, and attempting to implement user-resizable panels.
