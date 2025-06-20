@@ -1,0 +1,1 @@
+# AiCockpit Dashboard Architecture Vision
