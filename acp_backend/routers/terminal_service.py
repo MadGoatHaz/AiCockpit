@@ -168,4 +168,4 @@ async def terminal_websocket_endpoint(
         
         if term_key in active_terminals:
             del active_terminals[term_key]
-        logger.info(f"Terminal for session {session_id} fully cleaned up.") 
+        logger.info(f"Terminal for session {session_id} fully cleaned up.")

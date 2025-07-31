@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { BotMessageSquare, User, Settings2Icon, ChevronDownIcon } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 export interface AiChatPanelProps {
   workspaceId: string;
@@ -95,74 +96,39 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ workspaceId, selectedModelId,
     }]);
 
     try {
-      const response = await fetch('/api/llm/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
-        body: JSON.stringify({
-          model_id: activeModelId,
-          messages: apiMessages,
-          stream: true,
-          temperature: activeTemperature,
-        }),
+      // Use our new apiClient for streaming chat completions
+      const stream = await apiClient.chatCompletionStream({
+        model_id: activeModelId,
+        messages: apiMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date()
+        })),
+        stream: true,
+        temperature: activeTemperature,
       });
 
-      if (!response.ok || !response.body) {
-        const errorData = await response.json().catch(() => ({ detail: response.statusText || "Failed to connect to AI service"}));
-        throw new Error(errorData.detail);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
       let accumulatedResponse = "";
       
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (accumulatedResponse.trim() === '') {
-            setMessages(prev => prev.map(msg => 
-              msg.id === aiResponsePlaceholderId ? {...msg, text: "AI model returned an empty response." } : msg
-            ));
-          }
-          break;
+      for await (const chunk of stream) {
+        if (chunk.message.content) {
+          accumulatedResponse += chunk.message.content;
+          setMessages(prev => prev.map(msg =>
+            msg.id === aiResponsePlaceholderId ? {...msg, text: accumulatedResponse } : msg
+          ));
         }
-        
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
-        for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const jsonData = line.substring(5).trim();
-            try {
-              const parsedEvent = JSON.parse(jsonData);
-              if (parsedEvent.choices && parsedEvent.choices[0]?.delta?.content) {
-                accumulatedResponse += parsedEvent.choices[0].delta.content;
-                setMessages(prev => prev.map(msg => 
-                  msg.id === aiResponsePlaceholderId ? {...msg, text: accumulatedResponse } : msg
-                ));
-              } else if (parsedEvent.error) {
-                console.error("Stream error from backend:", parsedEvent.error.message);
-                setChatError(`AI Error: ${parsedEvent.error.message}`);
-                setMessages(prev => prev.map(msg => 
-                  msg.id === aiResponsePlaceholderId ? {...msg, text: `Error: ${parsedEvent.error.message}` } : msg
-                ));
-                return;
-              }
-              if (line.startsWith("event: eos")) {
-                console.log("EOS event received");
-              }
-            } catch (e) {
-              console.warn("Failed to parse JSON from stream chunk:", jsonData, e);
-            }
-          }
-        }
+      }
+      
+      if (accumulatedResponse.trim() === '') {
+        setMessages(prev => prev.map(msg =>
+          msg.id === aiResponsePlaceholderId ? {...msg, text: "AI model returned an empty response." } : msg
+        ));
       }
     } catch (error) {
       console.error("Chat API call failed:", error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       setChatError(`Failed to get AI response: ${errorMsg}`);
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === aiResponsePlaceholderId ? {...msg, text: `Error: ${errorMsg}` } : msg
       ));
     } finally {

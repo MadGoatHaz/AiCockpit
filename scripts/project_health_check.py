@@ -436,6 +436,59 @@ class AiCockpitHealthChecker:
             timestamp=datetime.now().isoformat()
         )
     
+    def check_external_ai_services(self) -> HealthCheckResult:
+        """Check if external AI services are configured."""
+        issues = []
+        recommendations = []
+        details = {}
+        score = 100
+        
+        try:
+            config_dir = Path.home() / ".acp"
+            config_path = config_dir / "external_ai_config.json"
+            
+            if not config_path.exists():
+                issues.append("External AI config not found. Run setup script.")
+                score -= 30
+                recommendations.append("Run python scripts/setup_external_ai.py to configure external AI services")
+                details["config_exists"] = False
+            else:
+                details["config_exists"] = True
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                
+                if not config.get("services"):
+                    issues.append("No external AI services configured.")
+                    score -= 20
+                    recommendations.append("Add external AI services through the setup script or web interface")
+                else:
+                    details["configured_services"] = len(config.get("services", []))
+                
+                active_service = config.get("active_service")
+                if not active_service:
+                    issues.append("No active external AI service set.")
+                    score -= 10
+                    recommendations.append("Set an active external AI service through the setup script or web interface")
+                else:
+                    details["active_service"] = active_service
+        
+        except Exception as e:
+            issues.append(f"Failed to check external AI services: {e}")
+            score -= 50
+            recommendations.append("Check the external AI configuration file for errors")
+        
+        status = "HEALTHY" if score >= 90 else "WARNING" if score >= 70 else "ERROR"
+        
+        return HealthCheckResult(
+            category="external_ai",
+            status=status,
+            score=score,
+            issues=issues,
+            recommendations=recommendations,
+            details=details,
+            timestamp=datetime.now().isoformat()
+        )
+    
     def run_comprehensive_check(self, categories: Optional[List[str]] = None) -> Dict[str, HealthCheckResult]:
         """Run comprehensive health check across all categories."""
         all_categories = {
@@ -443,7 +496,8 @@ class AiCockpitHealthChecker:
             "code": self.check_code_quality,
             "documentation": self.check_documentation,
             "configuration": self.check_configuration,
-            "integration": self.check_integration_health
+            "integration": self.check_integration_health,
+            "external_ai": self.check_external_ai_services
         }
         
         if categories:
@@ -543,7 +597,7 @@ Examples:
     parser.add_argument(
         "--category", 
         nargs="+", 
-        choices=["structure", "code", "documentation", "configuration", "integration", "all"],
+        choices=["structure", "code", "documentation", "configuration", "integration", "external_ai", "all"],
         help="Specific categories to check (default: all)"
     )
     
@@ -596,4 +650,4 @@ Examples:
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

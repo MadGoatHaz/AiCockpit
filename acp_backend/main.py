@@ -17,7 +17,7 @@ from acp_backend.dependencies import (
     get_session_handler,
     get_app_settings # Import the dependency getter for app_settings
 )
-from acp_backend.routers import agents, llm_service, system, work_board, work_sessions, workspace_files, terminal_service
+from acp_backend.routers import agents, llm_service, system, work_board, work_sessions, workspace_files, terminal_service, workspaces
 
 # Setup logging as early as possible
 # Pass LOG_LEVEL from the already imported app_settings instance
@@ -96,6 +96,10 @@ if app_settings.ENABLE_WORKSPACE_FILES_MODULE:
 if app_settings.ENABLE_TERMINAL_SERVICE_MODULE:
     app.include_router(terminal_service.router, prefix="/terminals", tags=["Terminal"])
     logger.info("Terminal Service module enabled and router included.")
+
+# Add workspaces router
+app.include_router(workspaces.router)
+logger.info("Workspaces module enabled and router included.")
 
 
 @app.get("/", tags=["Root"])

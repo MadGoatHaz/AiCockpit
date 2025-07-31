@@ -63,7 +63,7 @@ const TerminalManagerPanel: React.FC<TerminalManagerPanelProps> = ({ workspaceId
 
     // Construct WebSocket URL
     // Ensure the protocol is ws or wss based on the current window location protocol
-    const wsProtocol = window.location.protocol === 'https:/' ? 'wss' : 'ws';
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${wsProtocol}://${window.location.host}/api/terminals/sessions/${workspaceId}/ws`;
 
     const socket = new WebSocket(wsUrl);
@@ -108,7 +108,7 @@ const TerminalManagerPanel: React.FC<TerminalManagerPanelProps> = ({ workspaceId
             fitAddonRef.current?.fit();
             // Inform the backend PTY about the new size
             // The backend example uses "resize:cols,rows"
-            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && term.element) {
                  socketRef.current.send(`resize:${term.cols},${term.rows}`);
             }
         } catch (e) {

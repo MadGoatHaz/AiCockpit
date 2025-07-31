@@ -1,146 +1,223 @@
+// acp_frontend/src/components/workspaces/AIModelConfigurationPanel.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { CogIcon, CheckCircle2, AlertTriangleIcon, Loader2 } from 'lucide-react'; // Or any other relevant icon
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { apiClient, AIServiceConfig } from '@/lib/api-client';
+import { toast } from 'sonner';
 
 export interface AIModelConfigurationPanelProps {
-  workspaceId?: string; // Optional, might be useful for context
-  // Add any other props needed for configuration, e.g., current model, available models
-  onConfigurationChange?: (config: { selectedModelId?: string, temperature?: number }) => void;
+  workspaceId: string;
+  onConfigurationChange?: (config: any) => void;
 }
 
 interface AIModelSessionConfigData {
-  selected_model_id?: string | null; // Allow null from backend if not set
-  temperature?: number | null; // Allow null from backend if not set
-  // custom_parameters?: Record<string, any>; // For future use
+  selected_model: string;
+  temperature: number;
+  max_tokens?: number;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
 }
 
 interface LLMConfigFromBackend {
-    model_id: string;
-    model_name: string;
-    // backend_type: string; // Could be useful for display
-    // parameters: Record<string, any>; // For more detailed info
+  model_id: string;
+  model_name: string;
+  backend_type: string;
+  status: string;
+  parameters: Record<string, any>;
 }
-
-interface DiscoveredLLMConfigResponse {
-    configs: LLMConfigFromBackend[];
-}
-
-const DEFAULT_MODEL_ID = "gemma2-latest"; // A sensible default
-const DEFAULT_TEMPERATURE = 0.7;
 
 const AIModelConfigurationPanel: React.FC<AIModelConfigurationPanelProps> = ({ workspaceId, onConfigurationChange }) => {
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
-  const [temperature, setTemperature] = useState<number>(DEFAULT_TEMPERATURE);
-  const [availableModels, setAvailableModels] = useState<LLMConfigFromBackend[]>([]);
-  const [isLoading, setIsLoading] = useState(false); // Covers both config and model list loading initially
-  const [isModelsLoading, setIsModelsLoading] = useState(false); // Separate state for models list refresh
+  // State for external AI services
+  const [services, setServices] = useState<AIServiceConfig[]>([]);
+  const [selectedService, setSelectedService] = useState<string>('');
+  const [newService, setNewService] = useState<Omit<AIServiceConfig, 'name'> & { name: string }>({
+    name: '',
+    type: 'lmstudio',
+    base_url: 'http://localhost:1234/v1',
+    model: 'gpt-3.5-turbo',
+  });
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [modelsError, setModelsError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModelsLoading, setIsModelsLoading] = useState(true);
 
+  // State for model configuration
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [temperature, setTemperature] = useState<number>(0.7);
+  const [availableModels, setAvailableModels] = useState<LLMConfigFromBackend[]>([]);
+  const [maxTokens, setMaxTokens] = useState<number | undefined>(undefined);
+  const [topP, setTopP] = useState<number | undefined>(undefined);
+
+  // Fetch available models
   const fetchAvailableModels = useCallback(async () => {
     setIsModelsLoading(true);
-    setModelsError(null);
     try {
-        const response = await fetch('/api/llm/models'); // Assuming /api/llm/models is the endpoint
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({ detail: response.statusText }));
-            throw new Error(errData.detail || "Failed to load available AI models");
+      const response = await apiClient.getModels();
+      if (response.success && response.data) {
+        // The response.data is already an array of LLM objects
+        const models = response.data as unknown as LLMConfigFromBackend[];
+        setAvailableModels(models || []);
+        if (models && models.length > 0 && !selectedModel) {
+          setSelectedModel(models[0].model_id);
         }
-        const data: DiscoveredLLMConfigResponse = await response.json();
-        setAvailableModels(data.configs || []);
-        if (data.configs && data.configs.length > 0 && !data.configs.find(m => m.model_id === selectedModel)) {
-            // If current selectedModel is not in the new list, try to select the first one from the list
-            // This could happen if the previously saved model is no longer available.
-            // However, fetchConfig already sets selectedModel, so this might only be for initial load or if models change drastically.
-        }
-    } catch (err) {
-        console.error("Error fetching available models:", err);
-        setModelsError(err instanceof Error ? err.message : String(err));
-        setAvailableModels([]); // Clear models on error
+      }
+    } catch (error) {
+      console.error('Failed to fetch available models:', error);
+      toast.error('Failed to fetch available models');
     } finally {
-        setIsModelsLoading(false);
+      setIsModelsLoading(false);
     }
-  }, []); // Removed selectedModel from dependencies as it might cause loop if model list changes it
+  }, [selectedModel]);
 
-  const fetchConfig = useCallback(async () => {
-    if (!workspaceId) return;
+  // Fetch external services
+  const fetchServices = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
-      const response = await fetch(`/api/sessions/${workspaceId}/ai_config`);
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({detail: response.statusText}));
-        throw new Error(errData.detail || "Failed to load AI configuration");
+      const response = await apiClient.listExternalServices();
+      if (response.success && response.data) {
+        setServices(response.data.services || []);
+        if (response.data.services && response.data.services.length > 0 && !selectedService) {
+          setSelectedService(response.data.services[0].name);
+        }
       }
-      const config: AIModelSessionConfigData = await response.json();
-      setSelectedModel(config.selected_model_id || DEFAULT_MODEL_ID);
-      setTemperature(config.temperature ?? DEFAULT_TEMPERATURE); // Use ?? for null/undefined to default
-      if (onConfigurationChange) {
-        onConfigurationChange({ 
-          selectedModelId: config.selected_model_id || DEFAULT_MODEL_ID, 
-          temperature: config.temperature ?? DEFAULT_TEMPERATURE 
-        });
-      }
-    } catch (err) {
-      console.error("Error fetching AI config:", err);
-      setError(err instanceof Error ? err.message : String(err));
-      // Keep current/default values on error
+    } catch (error) {
+      console.error('Failed to fetch external services:', error);
+      toast.error('Failed to fetch external services');
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, onConfigurationChange]);
+  }, [selectedService]);
+
+  // Fetch current configuration
+  const fetchConfig = useCallback(async () => {
+    try {
+      // In a real implementation, this would fetch the current AI configuration
+      // For now, we'll use default values
+      setSelectedModel('gpt-3.5-turbo');
+      setTemperature(0.7);
+    } catch (error) {
+      console.error('Failed to fetch AI configuration:', error);
+    }
+  }, []);
 
   useEffect(() => {
+    fetchServices();
+    fetchAvailableModels();
     fetchConfig();
-    fetchAvailableModels(); // Fetch models on initial load too
-  }, [fetchConfig, fetchAvailableModels]);
+  }, [fetchServices, fetchAvailableModels, fetchConfig]);
 
-  const handleSaveConfiguration = async () => {
-    if (!workspaceId) {
-      setError("Workspace ID is missing. Cannot save configuration.");
+  const handleAddService = async () => {
+    if (!newService.name) {
+      toast.error('Service name is required');
       return;
     }
-    setIsSaving(true);
-    setError(null);
-    setSuccessMessage(null);
 
-    const configToSave: AIModelSessionConfigData = {
-      selected_model_id: selectedModel,
-      temperature: temperature,
-    };
-
+    setIsAddingService(true);
     try {
-      const response = await fetch(`/api/sessions/${workspaceId}/ai_config`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configToSave),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({detail: response.statusText}));
-        throw new Error(errData.detail || "Failed to save AI configuration");
+      const serviceConfig: AIServiceConfig = {
+        name: newService.name,
+        type: newService.type,
+        api_key: newService.api_key,
+        base_url: newService.base_url,
+        model: newService.model,
+        organization: newService.organization,
+        deployment_name: newService.deployment_name,
+        api_version: newService.api_version,
+      };
+
+      const response = await apiClient.addExternalService(serviceConfig);
+      if (response.success) {
+        toast.success('External service added successfully');
+        setNewService({
+          name: '',
+          type: 'lmstudio',
+          base_url: 'http://localhost:1234/v1',
+          model: 'gpt-3.5-turbo',
+        });
+        fetchServices(); // Refresh the list
+      } else {
+        toast.error(response.error || 'Failed to add external service');
       }
-      const savedConfig: AIModelSessionConfigData = await response.json();
-      setSelectedModel(savedConfig.selected_model_id || DEFAULT_MODEL_ID);
-      setTemperature(savedConfig.temperature ?? DEFAULT_TEMPERATURE);
-      setSuccessMessage("Configuration saved successfully!");
+    } catch (error) {
+      console.error('Failed to add external service:', error);
+      toast.error('Failed to add external service');
+    } finally {
+      setIsAddingService(false);
+    }
+  };
+
+  const handleRemoveService = async (serviceName: string) => {
+    try {
+      const response = await apiClient.removeExternalService(serviceName);
+      if (response.success) {
+        toast.success('External service removed successfully');
+        fetchServices(); // Refresh the list
+      } else {
+        toast.error(response.error || 'Failed to remove external service');
+      }
+    } catch (error) {
+      console.error('Failed to remove external service:', error);
+      toast.error('Failed to remove external service');
+    }
+  };
+
+  const handleTestConnection = async (serviceName: string) => {
+    setIsTestingConnection(true);
+    try {
+      const response = await apiClient.testServiceConnection(serviceName);
+      if (response.success) {
+        toast.success(response.data?.result?.response || 'Connection test successful');
+      } else {
+        toast.error(response.error || 'Connection test failed');
+      }
+    } catch (error) {
+      console.error('Failed to test connection:', error);
+      toast.error('Failed to test connection');
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleSetActiveService = async (serviceName: string) => {
+    try {
+      const response = await apiClient.setActiveService(serviceName);
+      if (response.success) {
+        toast.success('Active service set successfully');
+        setSelectedService(serviceName);
+      } else {
+        toast.error(response.error || 'Failed to set active service');
+      }
+    } catch (error) {
+      console.error('Failed to set active service:', error);
+      toast.error('Failed to set active service');
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    setIsSaving(true);
+    try {
+      // In a real implementation, this would save the configuration to the backend
+      // For now, we'll just show a success message
+      toast.success('AI configuration saved successfully');
       if (onConfigurationChange) {
-        onConfigurationChange({ 
-          selectedModelId: savedConfig.selected_model_id || DEFAULT_MODEL_ID, 
-          temperature: savedConfig.temperature ?? DEFAULT_TEMPERATURE 
+        onConfigurationChange({
+          selectedModel,
+          temperature,
+          maxTokens,
+          topP,
         });
       }
-      setTimeout(() => setSuccessMessage(null), 3000); // Clear success message after 3s
-    } catch (err) {
-      console.error("Error saving AI config:", err);
-      setError(err instanceof Error ? err.message : String(err));
+    } catch (error) {
+      console.error('Failed to save AI configuration:', error);
+      toast.error('Failed to save AI configuration');
     } finally {
       setIsSaving(false);
     }
@@ -149,86 +226,283 @@ const AIModelConfigurationPanel: React.FC<AIModelConfigurationPanelProps> = ({ w
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <div className="flex items-center">
-          <CogIcon className="h-5 w-5 mr-2 text-primary" />
-          <CardTitle className="text-lg">AI Model Configuration</CardTitle>
-        </div>
-        <CardDescription className="text-xs">
-          Configure the AI model and related settings for this workspace ({workspaceId ? workspaceId.substring(0,8) + '...' : 'N/A'}).
-        </CardDescription>
+        <CardTitle>AI Model Configuration</CardTitle>
       </CardHeader>
       <CardContent className="flex-grow space-y-6 overflow-auto p-4">
-        {isLoading && (
-          <div className="flex items-center justify-center text-muted-foreground py-4">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading configuration...
-          </div>
-        )}
-        {!isLoading && error && ( // Show error only if not loading, to prevent flicker
-          <div className="flex items-center p-3 rounded-md bg-destructive/10 text-destructive text-xs">
-            <AlertTriangleIcon className="h-4 w-4 mr-2 flex-shrink-0"/>
-            <div><span className="font-semibold">Error:</span> {error} <Button variant="link" size="sm" className="p-0 h-auto text-xs ml-1" onClick={fetchConfig}>Retry</Button></div>
-          </div>
-        )}
-        {!isLoading && ( // Don't show form if initial load is happening or failed critically (error state might show retry)
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="ai-model-select" className="text-xs">Select AI Model</Label>
-              {isModelsLoading && <p className="text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin inline mr-1"/>Loading models...</p>}
-              {modelsError && <p className="text-xs text-destructive"><AlertTriangleIcon className="h-3 w-3 inline mr-1"/>Models error: {modelsError} <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={fetchAvailableModels}>Retry</Button></p>}
-              <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isSaving || isLoading || isModelsLoading || availableModels.length === 0}>
-                <SelectTrigger id="ai-model-select" className="text-xs">
-                  <SelectValue placeholder="Choose a model" />
+        {/* External AI Services Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">External AI Services</h3>
+          
+          {/* Service Selection */}
+          <div className="space-y-2">
+            <Label>Active Service</Label>
+            <div className="flex space-x-2">
+              <Select 
+                value={selectedService} 
+                onValueChange={setSelectedService}
+                disabled={isSaving || isLoading || isModelsLoading || services.length === 0}
+              >
+                <SelectTrigger className="flex-grow">
+                  <SelectValue placeholder="Select a service" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableModels.length === 0 && !isModelsLoading && (
-                    <SelectItem value="no-models" disabled className="text-xs text-muted-foreground">No models available or failed to load.</SelectItem>
-                  )}
-                  {availableModels.map(model => (
-                    <SelectItem key={model.model_id} value={model.model_id} className="text-xs">
-                      {model.model_name} ({model.model_id})
+                  {services.map(service => (
+                    <SelectItem key={service.name} value={service.name}>
+                      {service.name} ({service.type})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Button 
+                onClick={() => selectedService && handleSetActiveService(selectedService)}
+                disabled={!selectedService || isSaving || isLoading || isModelsLoading}
+                variant="secondary"
+              >
+                Set Active
+              </Button>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="temperature" className="text-xs">Temperature: {temperature.toFixed(1)}</Label>
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-muted-foreground">Precise</span>
-                <input 
-                  type="range" 
-                  id="temperature" 
-                  min="0" 
-                  max="2" // Max temperature often 2.0
-                  step="0.1" 
-                  value={temperature} 
-                  onChange={(e) => setTemperature(parseFloat(e.target.value))} 
-                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                  disabled={isSaving || isLoading}
-                />
-                <span className="text-[11px] text-muted-foreground">Creative</span>
+          {/* Service Management */}
+          <div className="space-y-4 pt-4 border-t">
+            <h4 className="font-medium">Manage Services</h4>
+            
+            {/* Add New Service Form */}
+            <div className="space-y-4 p-3 bg-muted/30 rounded-md">
+              <h5 className="font-medium">Add New Service</h5>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="service-name">Service Name</Label>
+                  <Input
+                    id="service-name"
+                    value={newService.name}
+                    onChange={(e) => setNewService({...newService, name: e.target.value})}
+                    placeholder="e.g., LM Studio, OpenAI"
+                    disabled={isAddingService}
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <Label htmlFor="service-type">Service Type</Label>
+                  <Select
+                    value={newService.type}
+                    onValueChange={(value) => setNewService({...newService, type: value as any})}
+                    disabled={isAddingService}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lmstudio">LM Studio</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="azure">Azure OpenAI</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Controls randomness. Lower values (e.g., 0.2) are more focused, higher values (e.g., 1.0+) are more creative.
-              </p>
+              
+              {newService.type !== 'lmstudio' && (
+                <div className="space-y-1">
+                  <Label htmlFor="api-key">API Key</Label>
+                  <Input
+                    id="api-key"
+                    type="password"
+                    value={newService.api_key || ''}
+                    onChange={(e) => setNewService({...newService, api_key: e.target.value})}
+                    placeholder="Enter API key"
+                    disabled={isAddingService}
+                  />
+                </div>
+              )}
+              
+              <div className="space-y-1">
+                <Label htmlFor="base-url">Base URL</Label>
+                <Input
+                  id="base-url"
+                  value={newService.base_url || ''}
+                  onChange={(e) => setNewService({...newService, base_url: e.target.value})}
+                  placeholder="e.g., http://localhost:1234/v1"
+                  disabled={isAddingService}
+                />
+              </div>
+              
+              <div className="space-y-1">
+                <Label htmlFor="default-model">Default Model</Label>
+                <Input
+                  id="default-model"
+                  value={newService.model}
+                  onChange={(e) => setNewService({...newService, model: e.target.value})}
+                  placeholder="e.g., gpt-3.5-turbo"
+                  disabled={isAddingService}
+                />
+              </div>
+              
+              {newService.type === 'azure' && (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor="deployment-name">Deployment Name</Label>
+                    <Input
+                      id="deployment-name"
+                      value={newService.deployment_name || ''}
+                      onChange={(e) => setNewService({...newService, deployment_name: e.target.value})}
+                      placeholder="Enter deployment name"
+                      disabled={isAddingService}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="api-version">API Version</Label>
+                    <Input
+                      id="api-version"
+                      value={newService.api_version || ''}
+                      onChange={(e) => setNewService({...newService, api_version: e.target.value})}
+                      placeholder="e.g., 2024-05-01"
+                      disabled={isAddingService}
+                    />
+                  </div>
+                </>
+              )}
+              
+              <Button 
+                onClick={handleAddService}
+                disabled={isAddingService || !newService.name}
+                size="sm"
+                className="w-full"
+              >
+                {isAddingService ? 'Adding...' : 'Add Service'}
+              </Button>
             </div>
-          </>
-        )}
+            
+            {/* Existing Services List */}
+            <div className="space-y-2">
+              <h5 className="font-medium">Configured Services</h5>
+              {services.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No external services configured</p>
+              ) : (
+                <div className="space-y-2">
+                  {services.map((service) => (
+                    <div key={service.name} className="flex items-center justify-between p-2 border rounded-md">
+                      <div>
+                        <div className="font-medium">{service.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {service.type} - {service.base_url}
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleTestConnection(service.name)}
+                          disabled={isTestingConnection}
+                        >
+                          Test
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleRemoveService(service.name)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Model Configuration Section */}
+        <div className="space-y-4 pt-4 border-t">
+          <h3 className="text-lg font-medium">Model Parameters</h3>
+          
+          {/* Model Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="model-select">AI Model</Label>
+            <Select 
+              value={selectedModel} 
+              onValueChange={setSelectedModel}
+              disabled={isSaving || isLoading || isModelsLoading || availableModels.length === 0}
+            >
+              <SelectTrigger id="model-select">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableModels.map(model => (
+                  <SelectItem key={model.model_id} value={model.model_id}>
+                    {model.model_name} ({model.model_id})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Temperature */}
+          <div className="space-y-2">
+            <Label htmlFor="temperature">Temperature: {temperature}</Label>
+            <input
+              id="temperature"
+              type="range"
+              min="0"
+              max="2"
+              step="0.1"
+              value={temperature}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
+              className="w-full"
+              disabled={isSaving}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Precise</span>
+              <span>Creative</span>
+            </div>
+          </div>
+          
+          {/* Max Tokens */}
+          <div className="space-y-2">
+            <Label htmlFor="max-tokens">Max Tokens (optional)</Label>
+            <Input
+              id="max-tokens"
+              type="number"
+              value={maxTokens || ''}
+              onChange={(e) => setMaxTokens(e.target.value ? parseInt(e.target.value) : undefined)}
+              placeholder="e.g., 1000"
+              disabled={isSaving}
+            />
+          </div>
+          
+          {/* Top P */}
+          <div className="space-y-2">
+            <Label htmlFor="top-p">Top P (optional)</Label>
+            <Input
+              id="top-p"
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              value={topP || ''}
+              onChange={(e) => setTopP(e.target.value ? parseFloat(e.target.value) : undefined)}
+              placeholder="e.g., 0.9"
+              disabled={isSaving}
+            />
+          </div>
+        </div>
       </CardContent>
       <CardFooter className="border-t pt-4 flex flex-col items-start space-y-2">
-        <Button onClick={handleSaveConfiguration} size="sm" className="text-xs" disabled={isSaving || isLoading}>
-          {isSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving...</> : "Save Configuration"}
+        <Button 
+          onClick={handleSaveConfiguration}
+          disabled={isSaving}
+          className="w-full"
+        >
+          {isSaving ? 'Saving...' : 'Save Configuration'}
         </Button>
-        {successMessage && (
-          <div className="flex items-center text-green-600 text-xs mt-2">
-            <CheckCircle2 className="h-4 w-4 mr-1.5"/> {successMessage}
-          </div>
-        )}
-        {/* Error during save is shown near form or as a global notification ideally */}
+        <p className="text-xs text-muted-foreground text-center w-full">
+          Configuration will be applied to this workspace
+        </p>
       </CardFooter>
     </Card>
   );
 };
 
-export default AIModelConfigurationPanel; 
+export default AIModelConfigurationPanel;

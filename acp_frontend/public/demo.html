@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiCockpit - AI-Collaborative Development Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            min-height: 100vh;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            color: white;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .tagline {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: #fff;
+            color: #1a2a6c;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1a2a6c;
+        }
+
+        .feature-card p {
+            color: #666;
+        }
+
+        .demo-video {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin: 3rem 0;
+            color: white;
+        }
+
+        .demo-video h2 {
+            margin-bottom: 1rem;
+        }
+
+        .demo-placeholder {
+            background: rgba(255, 255, 255, 0.1);
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+
+        .terminal {
+            background: #000;
+            color: #00ff00;
+            padding: 1rem;
+            border-radius: 5px;
+            font-family: monospace;
+            text-align: left;
+            margin: 1rem 0;
+            min-height: 100px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .tagline {
+                font-size: 1.2rem;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>AiCockpit</h1>
+        <p class="tagline">The Revolutionary AI-Collaborative Development Platform</p>
+        <p style="max-width: 800px; margin: 0 auto 2rem; font-size: 1.1rem; opacity: 0.9;">
+            Where VS Code becomes the "IDE hand" of your AI collaborator. AiCockpit transforms how developers work with AI, making advanced AI collaboration not just possible, but seamless, intuitive, and profoundly powerful.
+        </p>
+        <a href="https://github.com/MadGoatHaz/AiCockpit" class="cta-button">View on GitHub</a>
+    </header>
+
+    <div class="container">
+        <div class="features">
+            <div class="feature-card">
+                <h3>Containerized Workspaces</h3>
+                <p>Launch isolated development environments instantly with full terminal access. Choose from multiple pre-configured Docker images for Python, Node.js, Go, and Java development.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Web-Based IDE</h3>
+                <p>Full-featured browser-based IDE with file browser, code editor, and integrated terminal. No local installation required - work from anywhere.</p>
+            </div>
+            <div class="feature-card">
+                <h3>AI Collaboration</h3>
+                <p>Integrated AI assistants help with coding, debugging, and learning. Get intelligent suggestions and explanations directly in your development environment.</p>
+            </div>
+        </div>
+
+        <div class="demo-video">
+            <h2>See AiCockpit in Action</h2>
+            <p>Experience the future of AI-collaborative development</p>
+            <div class="demo-placeholder">
+                <div>
+                    <p>Interactive Demo Coming Soon</p>
+                    <p>Watch this space for a live demonstration of AiCockpit's capabilities</p>
+                </div>
+            </div>
+            <div class="terminal">
+                $ # AiCockpit Terminal Access<br>
+                $ # Work with your AI collaborator in real-time<br>
+                $ python --version<br>
+                Python 3.11.4<br>
+                $ # AI: I can help you set up a new project...
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <h3>Instant Setup</h3>
+                <p>Create a new development environment in seconds. No more wrestling with local development setups or dependency conflicts.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Secure Isolation</h3>
+                <p>Each workspace runs in its own secure container, ensuring your projects and system remain safe from conflicts or security issues.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Future-Ready</h3>
+                <p>Built with the latest web technologies and designed for extensibility. AiCockpit is constantly evolving with new AI capabilities.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>AiCockpit - Revolutionizing AI-Collaborative Development</p>
+        <p><a href="https://github.com/MadGoatHaz/AiCockpit" style="color: rgba(255, 255, 255, 0.7);">GitHub Repository</a></p>
+    </footer>
+</body>
+</html>

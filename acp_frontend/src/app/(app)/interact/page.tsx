@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, XIcon } from 'lucide-react';
 import dynamic from 'next/dynamic'; // Import dynamic
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 // Import the new panel components
 import FileBrowserPanel, { FileSystemDisplayItem as FileSystemItem } from "@/components/workspaces/FileBrowserPanel";
@@ -34,14 +36,21 @@ interface Workspace {
 }
 
 const DEFAULT_AI_CONFIG = {
-    selectedModelId: "gemma2-latest", // Default model
+    selectedModelId: "gpt-3.5-turbo", // Default model for external services
     temperature: 0.7,
 };
 
 export default function InteractPage() {
+  const searchParams = useSearchParams();
+  const workspaceId = searchParams.get('workspace');
+  
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
   const workspaceCounterRef = useRef(1); // Start at 1 for naming the first workspace
+  
+  // If we have a workspaceId from query params, we'll use it
+  // Otherwise, we'll use the existing workspace functionality
+  const hasWorkspaceId = !!workspaceId;
 
   // Initialize first workspace on client-side to prevent hydration errors with UUID
   useEffect(() => {
@@ -127,10 +136,9 @@ export default function InteractPage() {
               >
                 {ws.name}
                 {workspaces.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-1/2 right-1 -translate-y-1/2 h-6 w-6 ml-2 rounded-full hover:bg-muted/50"
+                  <button
+                    type="button"
+                    className="absolute top-1/2 right-1 -translate-y-1/2 h-6 w-6 ml-2 rounded-full hover:bg-muted/50 flex items-center justify-center"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCloseTab(ws.id);
@@ -138,7 +146,7 @@ export default function InteractPage() {
                   >
                     <XIcon className="h-4 w-4" />
                     <span className="sr-only">Close tab {ws.name}</span>
-                  </Button>
+                  </button>
                 )}
               </TabsTrigger>
             ))}
@@ -209,12 +217,25 @@ export default function InteractPage() {
 
               {/* Bottom Row: Terminal */}
               <div className="bg-card text-card-foreground rounded-lg border h-full overflow-auto p-2">
-                {/* Ensure TerminalManagerPanel is rendered IF currentWorkspace exists */}
-                {currentWorkspace && (
-                    <TerminalManagerPanel workspaceId={currentWorkspace.id} />
-                )}
-                 {!currentWorkspace && (
-                    <div className="p-2">No active workspace for terminal</div>
+                {/* Show terminal or workspace message */}
+                {hasWorkspaceId ? (
+                  <TerminalManagerPanel workspaceId={workspaceId} />
+                ) : currentWorkspace ? (
+                  <TerminalManagerPanel workspaceId={currentWorkspace.id} />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center p-6">
+                      <h3 className="text-lg font-medium mb-2">No Active Workspace</h3>
+                      <p className="text-muted-foreground mb-4">
+                        {hasWorkspaceId
+                          ? "The specified workspace could not be loaded."
+                          : "Select a workspace from the Workspaces page to begin."}
+                      </p>
+                      <Button asChild>
+                        <a href="/workspaces">Go to Workspaces</a>
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
