@@ -54,7 +54,7 @@ class WorkspaceProvisioningService:
             self.base_storage_path = Path.home() / ".acp" / "workspaces"
             self.base_storage_path.mkdir(parents=True, exist_ok=True)
         
-    async def provision_workspace(self, 
+    async def provision_workspace(self,
                                  name: str,
                                  owner_id: str,
                                  description: Optional[str] = None,
@@ -67,14 +67,27 @@ class WorkspaceProvisioningService:
         """
         Provision a new development workspace.
         
+        This method creates a complete development workspace including:
+        - A dedicated storage directory for workspace files
+        - A container running the specified development environment
+        - Configured resource limits (CPU, memory)
+        - Initial files and environment variables
+        
+        The provisioning process involves several steps:
+        1. Creating a unique workspace ID
+        2. Setting up workspace storage directory
+        3. Initializing with any provided initial files
+        4. Creating container configuration with appropriate mappings
+        5. Creating and starting the workspace container
+        
         Args:
             name: Name of the workspace
             owner_id: ID of the user who owns this workspace
             description: Description of the workspace
             image: Docker image to use (defaults to base_image)
-            cpu_limit: CPU limit for the container
-            memory_limit: Memory limit for the container
-            storage_limit: Storage limit for the container
+            cpu_limit: CPU limit for the container (e.g., '1.0' for 1 CPU)
+            memory_limit: Memory limit for the container (e.g., '512m' for 512MB)
+            storage_limit: Storage limit for the container (e.g., '10g' for 10GB)
             initial_files: Dictionary of filename -> content for initial files
             environment_vars: Dictionary of environment variables
             
@@ -231,12 +244,22 @@ class WorkspaceProvisioningService:
         """
         Deprovision a workspace, removing both container and storage.
         
+        This method cleanly removes a workspace by:
+        1. Stopping and removing the associated container
+        2. Deleting the workspace storage directory and all its contents
+        
+        This is a destructive operation that cannot be undone. All files and data
+        associated with the workspace will be permanently deleted.
+        
         Args:
             workspace_id: ID of the workspace to deprovision
-            force: Whether to force removal of running containers
+            force: Whether to force removal of running containers (default: False)
             
         Returns:
             True if deprovisioning was successful
+            
+        Raises:
+            WorkspaceCreationError: If workspace deprovisioning fails
         """
         try:
             logger.info(f"Deprovisioning workspace {workspace_id}")
@@ -267,11 +290,22 @@ class WorkspaceProvisioningService:
         """
         Get comprehensive information about a workspace.
         
+        This method retrieves detailed information about a workspace including:
+        - Container information (status, resource usage, ports, etc.)
+        - Storage information (path, size, limits)
+        - Workspace metadata (ID, name, description, owner)
+        
+        This information is useful for displaying workspace details in the UI
+        and for monitoring workspace health and resource usage.
+        
         Args:
             workspace_id: ID of the workspace
             
         Returns:
-            Dictionary with workspace information
+            Dictionary with comprehensive workspace information
+            
+        Raises:
+            Exception: If there's an error retrieving workspace information
         """
         try:
             # Get container info
@@ -317,8 +351,20 @@ class WorkspaceProvisioningService:
         """
         List all provisioned workspaces with their information.
         
+        This method retrieves information about all workspaces that have been provisioned,
+        including both running and stopped workspaces. For each workspace, it provides:
+        - Container information (status, resource usage, ports, etc.)
+        - Storage information (path, size)
+        - Workspace metadata (ID, name, owner)
+        
+        This method is useful for displaying a dashboard of all workspaces in the UI
+        and for administrative tasks like cleanup of orphaned workspaces.
+        
         Returns:
-            Dictionary mapping workspace IDs to their information
+            Dictionary mapping workspace IDs to their comprehensive information
+            
+        Raises:
+            Exception: If there's an error retrieving the workspace list
         """
         try:
             # Get all containers

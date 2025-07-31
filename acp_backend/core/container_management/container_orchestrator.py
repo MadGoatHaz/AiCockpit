@@ -77,14 +77,20 @@ class ContainerOrchestrator:
         """
         Create a new container based on the provided configuration.
         
+        This method handles the complete container creation process:
+        1. Prepares Docker API parameters from the configuration
+        2. Pulls the required Docker image if it doesn't exist locally
+        3. Creates and starts the container
+        4. Returns detailed information about the created container
+        
         Args:
-            config: Container configuration
+            config: Container configuration including image, ports, volumes, etc.
             
         Returns:
-            Information about the created container
+            ContainerInfo object with detailed information about the created container
             
         Raises:
-            ContainerCreationError: If container creation fails
+            ContainerCreationError: If container creation fails for any reason
         """
         try:
             logger.info(f"Creating container '{config.name}' from image '{config.image}'")
@@ -148,14 +154,18 @@ class ContainerOrchestrator:
         """
         Start a stopped container.
         
+        This method starts a container that has been previously created but is not currently running.
+        It reloads the container information after starting to ensure the returned status is accurate.
+        
         Args:
             container_id: ID of the container to start
             
         Returns:
-            Information about the started container
+            ContainerInfo object with updated information about the started container
             
         Raises:
-            ContainerNotFoundError: If container doesn't exist
+            ContainerNotFoundError: If container with the specified ID doesn't exist
+            ContainerError: If there's an error starting the container
         """
         try:
             container = self.docker_client.containers.get(container_id)
@@ -180,14 +190,20 @@ class ContainerOrchestrator:
         """
         Stop a running container.
         
+        This method gracefully stops a container that is currently running.
+        It sends a SIGTERM signal to the container's main process, giving it time to shut down cleanly.
+        If the container doesn't stop within a timeout period, a SIGKILL signal is sent to force termination.
+        After stopping, it reloads the container information to ensure the returned status is accurate.
+        
         Args:
             container_id: ID of the container to stop
             
         Returns:
-            Information about the stopped container
+            ContainerInfo object with updated information about the stopped container
             
         Raises:
-            ContainerNotFoundError: If container doesn't exist
+            ContainerNotFoundError: If container with the specified ID doesn't exist
+            ContainerError: If there's an error stopping the container
         """
         try:
             container = self.docker_client.containers.get(container_id)
@@ -212,15 +228,19 @@ class ContainerOrchestrator:
         """
         Delete a container.
         
+        This method removes a container from the system. If the container is running,
+        it must be stopped first unless the force parameter is set to True.
+        
         Args:
             container_id: ID of the container to delete
-            force: Whether to force deletion of running containers
+            force: Whether to force deletion of running containers (default: False)
             
         Returns:
             True if deletion was successful
             
         Raises:
-            ContainerNotFoundError: If container doesn't exist
+            ContainerNotFoundError: If container with the specified ID doesn't exist
+            ContainerError: If there's an error deleting the container
         """
         try:
             container = self.docker_client.containers.get(container_id)
@@ -238,16 +258,21 @@ class ContainerOrchestrator:
     
     async def get_container_info(self, container_id: str) -> ContainerInfo:
         """
-        Get information about a container.
+        Get detailed information about a container.
+        
+        This method retrieves comprehensive information about a container including its current status,
+        resource usage, port mappings, and volume mappings. It's useful for monitoring container
+        health and displaying container details in the UI.
         
         Args:
             container_id: ID of the container
             
         Returns:
-            Information about the container
+            ContainerInfo object with detailed information about the container
             
         Raises:
-            ContainerNotFoundError: If container doesn't exist
+            ContainerNotFoundError: If container with the specified ID doesn't exist
+            ContainerError: If there's an error retrieving container information
         """
         try:
             container = self.docker_client.containers.get(container_id)
@@ -268,13 +293,20 @@ class ContainerOrchestrator:
     
     async def list_containers(self, all_containers: bool = False) -> List[ContainerInfo]:
         """
-        List all containers.
+        List all containers with detailed information.
+        
+        This method retrieves information about all containers managed by the Docker daemon.
+        By default, it only returns running containers, but can be configured to include
+        stopped containers as well.
         
         Args:
-            all_containers: Whether to include stopped containers
+            all_containers: Whether to include stopped containers (default: False)
             
         Returns:
-            List of container information
+            List of ContainerInfo objects with detailed information about each container
+            
+        Raises:
+            ContainerError: If there's an error retrieving the container list
         """
         try:
             containers = self.docker_client.containers.list(all=all_containers)
@@ -394,11 +426,21 @@ class ContainerOrchestrator:
         """
         Create a new development workspace.
         
+        This method creates a complete development workspace by setting up a container
+        with the specified configuration. The workspace includes:
+        - A container running the specified development environment
+        - Configured port mappings for development tools
+        - Volume mappings for persistent storage
+        - Environment variables for workspace identification
+        
         Args:
-            workspace_config: Configuration for the workspace
+            workspace_config: Configuration for the workspace including container settings
             
         Returns:
-            Information about the created workspace
+            WorkspaceInfo object with detailed information about the created workspace
+            
+        Raises:
+            ContainerCreationError: If workspace container creation fails
         """
         try:
             logger.info(f"Creating workspace '{workspace_config.name}' for user '{workspace_config.owner_id}'")
@@ -429,8 +471,16 @@ class ContainerOrchestrator:
         """
         Clean up orphaned containers that are not associated with any workspace.
         
+        This method identifies and removes containers that are no longer associated
+        with any active workspace. This helps prevent resource leaks and keeps the
+        system clean. In a production environment, this method would check against
+        a database of active workspaces to determine which containers are orphaned.
+        
         Returns:
             Number of containers cleaned up
+            
+        Raises:
+            ContainerError: If there's an error during cleanup
         """
         try:
             # In a real implementation, you would check against your workspace database

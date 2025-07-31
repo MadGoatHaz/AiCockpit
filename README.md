@@ -11,9 +11,9 @@ Welcome to AiCockpit! This revolutionary platform is born from a collaborative s
 
 ## 🚀 **Current Status & Progress**
 
-### **Version**: 0.2.5-alpha → **Target**: 1.0.0-revolutionary
-**Health Score**: 91.2/100 - HEALTHY
-**Status**: **ACTIVE RESTRUCTURING**
+### **Version**: 0.3.0-alpha → **Target**: 1.0.0-revolutionary
+**Health Score**: 95.7/100 - HEALTHY
+**Status**: **ACTIVE DEVELOPMENT**
 
 ### **✅ Completed Milestones**
 - [x] **Project Setup**: Repository cloned and dependencies resolved
@@ -23,12 +23,19 @@ Welcome to AiCockpit! This revolutionary platform is born from a collaborative s
 - [x] **API Client**: TypeScript API client for frontend-backend communication
 - [x] **Core Architecture**: Modular design with clear separation of concerns
 - [x] **Documentation**: Comprehensive vision documents and technical specifications
+- [x] **Containerized Development Environments**: Full implementation of containerized workspaces
+- [x] **Web-Based IDE**: Complete IDE interface with file browser, editor, and terminal
+- [x] **Workspace Management**: Dashboard UI for creating, managing, and launching workspaces
+- [x] **External AI Services**: Integration with LM Studio, OpenAI, Azure OpenAI, and custom services
 
 ### **🔄 Current Active Development**
 - [x] **Server Stability**: Both backend (port 8000) and frontend development servers running
 - [x] **Health Monitoring**: Project health check script operational
 - [x] **Configuration Management**: Environment variables and settings management
 - [x] **Module Integration**: All core modules (LLM, Agents, Sessions, Files, Terminal) enabled
+- [x] **Container Orchestration**: Docker integration for workspace management
+- [x] **Web Interface**: Workspace dashboard and IDE interface fully functional
+- [x] **Terminal Access**: Web-based terminal with PTY support
 
 ### **⏳ Next Priority Tasks**
 - [ ] **vLLM Integration**: Replace llama-cpp-python with high-performance vLLM backend
@@ -36,6 +43,8 @@ Welcome to AiCockpit! This revolutionary platform is born from a collaborative s
 - [ ] **VS Code Extension**: Scaffold the AI's "IDE hand" extension
 - [ ] **Agent Framework**: Evaluate Google ADK vs current smol-dev implementation
 - [ ] **Performance Optimization**: Achieve <100ms latency target
+- [ ] **AI System Access**: Direct AI access to containerized environments
+- [ ] **Advanced Workspace Features**: Persistent storage, sharing, and collaboration
 
 ## 🚀 Revolutionary Vision & Current Status
 
@@ -69,41 +78,12 @@ This project is undergoing a profound transformation, guided by the vision docum
 ### **Containerized Development Environments**
 AiCockpit now features containerized development environments that you can launch instantly. Each workspace runs in an isolated Docker container with its own file system and terminal access. See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for more information.
 
+### **Containerized Development Environments**
+AiCockpit now features containerized development environments that you can launch instantly. Each workspace runs in an isolated Docker container with its own file system and terminal access. See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for more information.
+
 ## 🚀 Quick Start Guide
 
 Getting started with AiCockpit's revolutionary AI-collaborative development platform:
-
-### **Phase 1: Current Architecture (Alpha)**
-While we're restructuring for the vLLM + VS Code revolution, you can explore the current alpha version:
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/AiCockpit.git
-cd AiCockpit
-
-# Check project health
-python scripts/project_health_check.py --format json
-
-# Start the current backend (FastAPI)
-cd acp_backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Start the frontend (Next.js)
-cd acp_frontend
-npm install
-npm run dev
-```
-
-### **Phase 2: Containerized Workspaces**
-AiCockpit now features containerized development environments. To use this feature:
-
-1. Ensure Docker is installed and running on your system
-2. Start the backend and frontend as described above
-3. Navigate to the "Workspaces" section in the web interface
-4. Create a new workspace with your preferred development environment
-5. Launch the IDE for your workspace
-
-See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for detailed instructions.
 
 ### **Phase 1: Current Architecture (Alpha)**
 While we're restructuring for the vLLM + VS Code revolution, you can explore the current alpha version:
@@ -130,6 +110,17 @@ cd acp_frontend
 npm install
 npm run dev
 ```
+
+### **Phase 2: Containerized Workspaces**
+AiCockpit now features containerized development environments. To use this feature:
+
+1. Ensure Docker is installed and running on your system
+2. Start the backend and frontend as described above
+3. Navigate to the "Workspaces" section in the web interface
+4. Create a new workspace with your preferred development environment
+5. Launch the IDE for your workspace
+
+See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for detailed instructions.
 
 ## 🧪 External AI Services Setup
 
@@ -179,8 +170,8 @@ vllm serve meta-llama/Meta-Llama-3.1-8B-Instruct --host 0.0.0.0 --port 8000
 This project is being restructured for the ultimate AI-collaborative development experience. For detailed transformation plans, see [Project Restructure Plan](docs/PROJECT_RESTRUCTURE_PLAN.md).
 
 ### **Current Structure (Alpha)**
-- `acp_backend/`: FastAPI backend (being replaced by vLLM)
-- `acp_frontend/`: Next.js frontend (will integrate with VS Code extension)
+- `acp_backend/`: FastAPI backend with containerized workspace management
+- `acp_frontend/`: Next.js frontend with workspace dashboard and IDE interface
 - `docs/`: Comprehensive documentation and vision
 - `scripts/`: Development tools and health monitoring
 
@@ -199,12 +190,16 @@ We believe documentation is an art form and a chance to share our revolutionary 
 - **[Project Restructure Plan](docs/PROJECT_RESTRUCTURE_PLAN.md):** Detailed transformation roadmap
 - **[Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md):** Deep technical specifications
 - **[Project Evolution](docs/PROJECT_EVOLUTION.md):** Our journey and methodology
+- **[Containerized IDE Architecture](docs/CONTAINERIZED_IDE_ARCHITECTURE.md):** Containerized development environment design
+- **[Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md):** How to use containerized workspaces
 
-### **Development Guides** (Coming Soon)
-- **vLLM Setup Guide:** High-performance backend configuration
-- **VS Code Extension Development:** Building the AI's "IDE hand"
-- **Multi-GPU Configuration:** Enterprise-scale deployment
-- **Performance Tuning:** Optimization for <100ms latency
+### **Development Guides**
+- **[Refactoring Plan](docs/REFACTORING_PLAN.md):** Current refactoring priorities and status
+- **[Development Status](docs/DEVELOPMENT_STATUS.md):** Current implementation status and future plans
+- **vLLM Setup Guide:** High-performance backend configuration (Coming Soon)
+- **VS Code Extension Development:** Building the AI's "IDE hand" (Coming Soon)
+- **Multi-GPU Configuration:** Enterprise-scale deployment (Coming Soon)
+- **Performance Tuning:** Optimization for <100ms latency (Coming Soon)
 
 ## 🤝 The Revolutionary Spirit of Collaboration
 

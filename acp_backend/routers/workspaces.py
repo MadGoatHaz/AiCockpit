@@ -74,11 +74,22 @@ async def create_workspace(request: CreateWorkspaceRequest):
     """
     Create a new development workspace.
     
+    This endpoint provisions a complete development workspace including:
+    - A container running the specified development environment
+    - A dedicated storage directory for workspace files
+    - Configured resource limits (CPU, memory)
+    
+    The workspace will be ready to use immediately after creation, with VS Code
+    server running and accessible through the web interface.
+    
     Args:
-        request: Workspace creation request
+        request: Workspace creation request containing name, description, image, and resource limits
         
     Returns:
-        Information about the created workspace
+        WorkspaceResponse with information about the created workspace
+        
+    Raises:
+        HTTPException: If workspace creation fails or Docker is not available
     """
     try:
         logger.info(f"Creating workspace '{request.name}'")
@@ -143,13 +154,25 @@ async def create_workspace(request: CreateWorkspaceRequest):
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
 async def get_workspace(workspace_id: str):
     """
-    Get information about a specific workspace.
+    Get detailed information about a specific workspace.
+    
+    This endpoint retrieves comprehensive information about a workspace including:
+    - Current status (running, stopped, etc.)
+    - Container information (ID, image, resource usage)
+    - Storage information (path, size)
+    - Metadata (name, description, owner)
+    
+    This information is useful for displaying workspace details in the UI and
+    for monitoring workspace health and resource usage.
     
     Args:
         workspace_id: ID of the workspace to retrieve
         
     Returns:
-        Information about the workspace
+        WorkspaceResponse with detailed information about the workspace
+        
+    Raises:
+        HTTPException: If workspace is not found or Docker is not available
     """
     try:
         logger.info(f"Retrieving workspace '{workspace_id}'")
@@ -203,10 +226,22 @@ async def get_workspace(workspace_id: str):
 @router.get("/", response_model=List[WorkspaceResponse])
 async def list_workspaces():
     """
-    List all workspaces.
+    List all provisioned workspaces with their information.
+    
+    This endpoint retrieves information about all workspaces that have been provisioned,
+    including both running and stopped workspaces. For each workspace, it provides:
+    - Current status (running, stopped, etc.)
+    - Container information (ID, image)
+    - Metadata (name, description, owner)
+    
+    This endpoint is useful for displaying a dashboard of all workspaces in the UI
+    and for administrative tasks like cleanup of orphaned workspaces.
     
     Returns:
-        List of workspaces
+        List of WorkspaceResponse objects with information about each workspace
+        
+    Raises:
+        HTTPException: If Docker is not available or there's an internal server error
     """
     try:
         logger.info("Listing all workspaces")
@@ -260,10 +295,20 @@ async def list_workspaces():
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(workspace_id: str):
     """
-    Delete a workspace.
+    Delete a workspace and all associated resources.
+    
+    This endpoint permanently removes a workspace by:
+    1. Stopping and removing the associated container
+    2. Deleting the workspace storage directory and all its contents
+    
+    This is a destructive operation that cannot be undone. All files and data
+    associated with the workspace will be permanently deleted.
     
     Args:
         workspace_id: ID of the workspace to delete
+        
+    Raises:
+        HTTPException: If workspace is not found or there's an internal server error
     """
     try:
         logger.info(f"Deleting workspace '{workspace_id}'")
@@ -285,11 +330,18 @@ async def start_workspace(workspace_id: str):
     """
     Start a stopped workspace.
     
+    This endpoint starts a workspace container that has been previously created
+    but is not currently running. After starting, the workspace will be accessible
+    through the web interface.
+    
     Args:
         workspace_id: ID of the workspace to start
         
     Returns:
-        Information about the started workspace
+        WorkspaceResponse with updated information about the started workspace
+        
+    Raises:
+        HTTPException: If workspace is not found, Docker is not available, or there's an internal server error
     """
     try:
         logger.info(f"Starting workspace '{workspace_id}'")
@@ -331,11 +383,18 @@ async def stop_workspace(workspace_id: str):
     """
     Stop a running workspace.
     
+    This endpoint gracefully stops a workspace container that is currently running.
+    The container will be shut down cleanly, preserving all data in the workspace
+    storage directory. The workspace can be started again later using the start endpoint.
+    
     Args:
         workspace_id: ID of the workspace to stop
         
     Returns:
-        Information about the stopped workspace
+        WorkspaceResponse with updated information about the stopped workspace
+        
+    Raises:
+        HTTPException: If workspace is not found, Docker is not available, or there's an internal server error
     """
     try:
         logger.info(f"Stopping workspace '{workspace_id}'")

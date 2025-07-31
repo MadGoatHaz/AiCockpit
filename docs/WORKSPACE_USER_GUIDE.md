@@ -70,12 +70,23 @@ Each workspace provides full terminal access to the container, allowing you to:
 - Execute scripts
 - Use version control (Git)
 
+### External AI Services
+
+AiCockpit supports integration with various AI services:
+- **LM Studio**: Run local AI models on your machine
+- **OpenAI**: Access to GPT models
+- **Azure OpenAI**: Enterprise-grade AI services
+- **Custom Services**: Connect to any OpenAI-compatible API
+
+To configure external AI services, use the AI Config panel in the web interface.
+
 ## Best Practices
 
 1. **Organize Workspaces**: Create separate workspaces for different projects
 2. **Clean Up**: Delete workspaces you're no longer using to free up resources
 3. **Save Work**: For important work, use version control or export your files
 4. **Use Appropriate Images**: Choose the Docker image that best matches your development needs
+5. **Configure AI Services**: Set up external AI services for enhanced functionality
 
 ## Troubleshooting
 
@@ -96,6 +107,12 @@ Each workspace provides full terminal access to the container, allowing you to:
 - Verify you're in the correct workspace
 - Check file permissions within the container
 - Ensure the file path is correct
+
+### AI Service Configuration Issues
+
+- Verify API keys and connection details
+- Test service connectivity using the "Test Connection" button
+- Check that the service is running and accessible
 
 ## Getting Help
 
