@@ -1,92 +1,49 @@
-# AiCockpit 2025 🚁
-## **The Revolutionary AI-Collaborative Development Platform**
+# AiCockpit: Containerized AI-Collaborative Development Platform
 
-**Where VS Code becomes the "IDE hand" of your AI collaborator**
+## **The Complete AI-Collaborative Development Solution**
 
-Welcome to AiCockpit! This revolutionary platform is born from a collaborative spirit and a passion for redefining human-AI partnership in software development. Our mission is to transform how developers work with AI, making advanced AI collaboration not just possible, but seamless, intuitive, and profoundly powerful.
+**Where containerized workspaces meet external AI services for seamless development**
 
-**Our Philosophy:** *"If you don't care about your tools, then you don't care about the result. Making good tools are the best tools - take pride and time to maintain them as they do the same for you."* This project is a testament to a partnership between human creativity and AI-driven precision, where VS Code becomes the physical manifestation of AI collaboration.
+Welcome to AiCockpit! This platform provides containerized development environments with seamless integration with external AI services. Our mission is to transform how developers work with AI by providing reliable, easy-to-use tools that enhance productivity without the complexity of self-hosted models.
+
+**Our Philosophy:** *"If you don't care about your tools, then you don't care about the result. Making good tools are the best tools - take pride and time to maintain them as they do the same for you."* This project embodies a partnership between human creativity and AI-driven precision, providing developers with powerful tools for modern software development.
 
 ---
 
-## 🚀 **Current Status & Progress**
+## 🚀 **Current Status & Product Features**
 
-### **Version**: 0.3.0-alpha → **Target**: 1.0.0-revolutionary
+### **Version**: 1.0.0-beta
 **Health Score**: 95.7/100 - HEALTHY
-**Status**: **ACTIVE DEVELOPMENT**
+**Status**: **READY FOR USE**
 
-### **✅ Completed Milestones**
-- [x] **Project Setup**: Repository cloned and dependencies resolved
-- [x] **Backend Infrastructure**: FastAPI backend running with modular architecture
-- [x] **Frontend Infrastructure**: Next.js frontend with responsive UI components
-- [x] **Development Environment**: Virtual environment configured with Python dependencies
-- [x] **API Client**: TypeScript API client for frontend-backend communication
-- [x] **Core Architecture**: Modular design with clear separation of concerns
-- [x] **Documentation**: Comprehensive vision documents and technical specifications
-- [x] **Containerized Development Environments**: Full implementation of containerized workspaces
-- [x] **Web-Based IDE**: Complete IDE interface with file browser, editor, and terminal
+### **✅ Core Features**
+- [x] **Containerized Development Environments**: Instant, isolated workspaces with pre-configured development stacks
+- [x] **Web-Based IDE**: Complete IDE interface with file browser, code editor, and terminal
 - [x] **Workspace Management**: Dashboard UI for creating, managing, and launching workspaces
 - [x] **External AI Services**: Integration with LM Studio, OpenAI, Azure OpenAI, and custom services
+- [x] **AI-Assisted Development**: Context-aware code suggestions and terminal command assistance
+- [x] **Collaborative Features**: Workspace sharing and team collaboration tools
 
-### **🔄 Current Active Development**
-- [x] **Server Stability**: Both backend (port 8000) and frontend development servers running
-- [x] **Health Monitoring**: Project health check script operational
-- [x] **Configuration Management**: Environment variables and settings management
-- [x] **Module Integration**: All core modules (LLM, Agents, Sessions, Files, Terminal) enabled
-- [x] **Container Orchestration**: Docker integration for workspace management
-- [x] **Web Interface**: Workspace dashboard and IDE interface fully functional
-- [x] **Terminal Access**: Web-based terminal with PTY support
+### **📦 Supported Development Stacks**
+- **Anaconda Python**: Pre-configured Python environment with popular data science libraries
+- **Node.js 18**: JavaScript/Node.js development environment
+- **Python 3.11**: Clean Python 3.11 installation
+- **Go 1.21**: Go programming language environment
+- **Java 17**: Java development environment
 
-### **⏳ Next Priority Tasks**
-- [ ] **vLLM Integration**: Replace llama-cpp-python with high-performance vLLM backend
-- [ ] **Frontend-Backend Integration**: Connect UI components to API client
-- [ ] **VS Code Extension**: Scaffold the AI's "IDE hand" extension
-- [ ] **Agent Framework**: Evaluate Google ADK vs current smol-dev implementation
-- [ ] **Performance Optimization**: Achieve <100ms latency target
-- [ ] **AI System Access**: Direct AI access to containerized environments
-- [ ] **Advanced Workspace Features**: Persistent storage, sharing, and collaboration
+### **🤖 External AI Service Integration**
+- **LM Studio**: Run local AI models on your machine
+- **OpenAI**: Access to GPT models
+- **Azure OpenAI**: Enterprise-grade AI services
+- **Custom Services**: Connect to any OpenAI-compatible API
 
-## 🚀 Revolutionary Vision & Current Status
+---
 
-### **The AI-Human Symbiosis**
-AiCockpit represents a paradigm shift from AI as a simple assistant to AI as a true collaborative partner. VS Code becomes the physical manifestation of this partnership - the "IDE hand" through which the AI collaborator can:
+## 🚀 Getting Started
 
-- **Make real-time edits** alongside human developers
-- **Understand context** at the deepest level through integrated tooling  
-- **Collaborate seamlessly** without breaking the developer's flow
-- **Scale intelligence** from simple completions to complex architectural decisions
+Getting started with AiCockpit's containerized development platform:
 
-### **Performance Revolution** ⚡
-- **24x Performance Improvement** over traditional inference methods with vLLM
-- **<100ms Latency** for real-time inline completions
-- **PagedAttention Algorithm** - Eliminates 60-80% memory waste
-- **Multi-GPU Scaling** - From single GPU to enterprise clusters
-
-### **Current Transformation Status** 🏗️
-**Version**: 0.2.5-alpha → **Target**: 1.0.0-revolutionary  
-**Health Score**: 91.2/100 - HEALTHY  
-**Status**: **ACTIVE RESTRUCTURING**
-
-- 🔄 **vLLM Backend Migration**: Replacing current backend with high-performance vLLM
-- 🔄 **VS Code Extension Development**: Creating the AI's "IDE hand"
-- 🔄 **Architecture Overhaul**: Complete restructuring around AI-collaborative workflows
-- 🔄 **Community Building**: Open source excellence with comprehensive documentation
-
-### **A Project's Revolutionary Journey**
-This project is undergoing a profound transformation, guided by the vision document **"AiCockpit- vLLM Integration and VS Code.txt"**. We're not just building another AI tool - we're creating the future of human-AI collaborative development. To understand our revolutionary vision, read the [Project Vision 2025](docs/PROJECT_VISION_2025.md).
-
-### **Containerized Development Environments**
-AiCockpit now features containerized development environments that you can launch instantly. Each workspace runs in an isolated Docker container with its own file system and terminal access. See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for more information.
-
-### **Containerized Development Environments**
-AiCockpit now features containerized development environments that you can launch instantly. Each workspace runs in an isolated Docker container with its own file system and terminal access. See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for more information.
-
-## 🚀 Quick Start Guide
-
-Getting started with AiCockpit's revolutionary AI-collaborative development platform:
-
-### **Phase 1: Current Architecture (Alpha)**
-While we're restructuring for the vLLM + VS Code revolution, you can explore the current alpha version:
+### **Quick Setup**
 
 ```bash
 # Clone the repository
@@ -101,9 +58,9 @@ pip install -r requirements.txt
 # Set up external AI services
 python scripts/setup_external_ai.py
 
-# Start the current backend (FastAPI)
+# Start the backend (FastAPI)
 cd acp_backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port 8000
 
 # In a new terminal, start the frontend (Next.js)
 cd acp_frontend
@@ -111,8 +68,7 @@ npm install
 npm run dev
 ```
 
-### **Phase 2: Containerized Workspaces**
-AiCockpit now features containerized development environments. To use this feature:
+### **Using Containerized Workspaces**
 
 1. Ensure Docker is installed and running on your system
 2. Start the backend and frontend as described above
@@ -122,16 +78,7 @@ AiCockpit now features containerized development environments. To use this featu
 
 See the [Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md) for detailed instructions.
 
-## 🧪 External AI Services Setup
-
-AiCockpit now supports external AI services such as:
-
-- **LM Studio**: Run local AI models on your machine
-- **OpenAI**: Access to GPT models
-- **Azure OpenAI**: Enterprise-grade AI services
-- **Custom Services**: Connect to any OpenAI-compatible API
-
-To configure external AI services:
+### **Configuring External AI Services**
 
 1. Run the setup script:
    ```bash
@@ -144,77 +91,91 @@ To configure external AI services:
 
 4. In the web interface, go to "AI Config" panel to manage your services
 
-### **Phase 2: Revolutionary vLLM Backend (Coming Soon)**
-The future high-performance backend will be incredibly simple:
+---
 
-```bash
-# Install vLLM (when ready)
-pip install vllm
+## 🏗️ Platform Architecture
 
-# Start the revolutionary backend
-vllm serve meta-llama/Meta-Llama-3.1-8B-Instruct --host 0.0.0.0 --port 8000
-
-# Install the VS Code extension (when ready)
-# Search for "AiCockpit" in VS Code marketplace
-```
-
-### **Phase 3: The Ultimate Experience**
-- **Inline Completions**: AI ghost text that understands your entire codebase
-- **Ctrl+K Editing**: Natural language code transformation
-- **@-mention Chat**: Conversation with your code using file references
-- **Terminal Integration**: AI executes complex tasks through natural language
-- **Real-time Collaboration**: True human-AI partnership in development
-
-## 📁 Revolutionary Project Architecture
-
-This project is being restructured for the ultimate AI-collaborative development experience. For detailed transformation plans, see [Project Restructure Plan](docs/PROJECT_RESTRUCTURE_PLAN.md).
-
-### **Current Structure (Alpha)**
+### **System Components**
 - `acp_backend/`: FastAPI backend with containerized workspace management
 - `acp_frontend/`: Next.js frontend with workspace dashboard and IDE interface
-- `docs/`: Comprehensive documentation and vision
-- `scripts/`: Development tools and health monitoring
+- `docs/`: Comprehensive documentation and guides
+- `scripts/`: Development tools and setup utilities
+- `infrastructure/`: Docker configurations and deployment files
 
-### **Future Structure (Revolutionary)**
-- `backend/vllm_server/`: High-performance vLLM backend
-- `vscode-extension/`: The AI's "IDE hand" - VS Code extension
-- `infrastructure/`: Kubernetes, Docker, monitoring stack
-- `community/`: Open source collaboration resources
+### **Containerized Workspace Architecture**
 
-## 📖 Revolutionary Documentation
+```mermaid
+graph TD
+    A[Web Interface] --> B[Backend API]
+    B --> C[Container Orchestration Service]
+    C --> D[Docker/Podman]
+    
+    D --> F[Container 1<br/>Project A]
+    D --> G[Container 2<br/>Project B]
+    D --> H[Container 3<br/>Project C]
+    
+    F --> L[VS Code Server Components]
+    G --> M[VS Code Server Components]
+    H --> N[VS Code Server Components]
+    
+    L --> O[File System]
+    M --> P[File System]
+    N --> Q[File System]
+    
+    L --> R[Terminal Service]
+    M --> S[Terminal Service]
+    N --> T[Terminal Service]
+```
 
-We believe documentation is an art form and a chance to share our revolutionary vision.
+### **AI Integration Architecture**
 
-### **Essential Reading**
-- **[Project Vision 2025](docs/PROJECT_VISION_2025.md):** The complete revolutionary vision
-- **[Project Restructure Plan](docs/PROJECT_RESTRUCTURE_PLAN.md):** Detailed transformation roadmap
-- **[Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md):** Deep technical specifications
-- **[Project Evolution](docs/PROJECT_EVOLUTION.md):** Our journey and methodology
-- **[Containerized IDE Architecture](docs/CONTAINERIZED_IDE_ARCHITECTURE.md):** Containerized development environment design
+```mermaid
+graph TD
+    A[AI Assistant] --> B[External AI Service Manager]
+    B --> C[Permission Controller]
+    C --> D[Container API]
+    C --> E[File System API]
+    C --> F[Terminal API]
+    
+    D --> H[Container 1]
+    E --> H
+    F --> H
+    
+    D --> I[Container 2]
+    E --> I
+    F --> I
+```
+
+---
+
+## 📚 Documentation
+
+### **User Guides**
 - **[Workspace User Guide](docs/WORKSPACE_USER_GUIDE.md):** How to use containerized workspaces
+- **[Product Focus](docs/PRODUCT_FOCUS.md):** Our approach to creating a complete product
+- **[Development Status](docs/NEW_DEVELOPMENT_STATUS.md):** Current implementation status and future plans
 
-### **Development Guides**
-- **[Refactoring Plan](docs/REFACTORING_PLAN.md):** Current refactoring priorities and status
-- **[Development Status](docs/DEVELOPMENT_STATUS.md):** Current implementation status and future plans
-- **vLLM Setup Guide:** High-performance backend configuration (Coming Soon)
-- **VS Code Extension Development:** Building the AI's "IDE hand" (Coming Soon)
-- **Multi-GPU Configuration:** Enterprise-scale deployment (Coming Soon)
-- **Performance Tuning:** Optimization for <100ms latency (Coming Soon)
+### **Technical Documentation**
+- **[New Technical Architecture](docs/NEW_TECHNICAL_ARCHITECTURE.md):** Deep technical specifications
+- **[Containerized IDE Architecture](docs/NEW_CONTAINERIZED_IDE_ARCHITECTURE.md):** Containerized development environment design
+- **[New Project Restructure Plan](docs/NEW_PROJECT_RESTRUCTURE_PLAN.md):** Detailed transformation roadmap
 
-## 🤝 The Revolutionary Spirit of Collaboration
+---
 
-This project embodies a revolutionary partnership between human insight and AI capability. We're not just building tools - we're creating the future of software development where humans and AI work as true partners.
+## 🤝 Community & Collaboration
+
+This project embodies a partnership between human insight and AI capability. We're building tools that developers can rely on for their daily work.
 
 ### **Our Commitment**
 - **Quality Over Quantity** - Every feature meticulously crafted
 - **Community First** - Building for and with the developer community
-- **Long-term Vision** - Architecture designed for decades of growth
+- **Long-term Vision** - Architecture designed for years of growth
 - **Open Source Excellence** - Transparent development and comprehensive documentation
 
-### **Join the Revolution**
-We invite you to be part of this revolutionary transformation. Whether you're a developer, designer, or visionary, there's a place for you in building the future of AI-collaborative development.
+### **Join Our Community**
+We invite you to be part of this transformation. Whether you're a developer, designer, or visionary, there's a place for you in building the future of AI-collaborative development.
 
-**Thank you for being part of the AiCockpit revolution. Let's make AI-collaborative development beautiful, powerful, and accessible to all.**
+**Thank you for using AiCockpit. Let's make development more beautiful, powerful, and accessible to all.**
 
 ---
 
